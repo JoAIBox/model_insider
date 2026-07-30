@@ -15,8 +15,9 @@ import { MLAOperatorDeepDive } from './components/MLAOperatorDeepDive';
 import { MoEOperatorDeepDive } from './components/MoEOperatorDeepDive';
 import { AttnResOperatorDeepDive } from './components/AttnResOperatorDeepDive';
 import { UnembeddingOperatorDeepDive } from './components/UnembeddingOperatorDeepDive';
+import { RoPEOperatorDeepDive } from './components/RoPEOperatorDeepDive';
 
-type Tab = 'overview' | 'kda' | 'attnres' | 'moe' | 'vision' | 'multimodal' | 'muon' | 'pretrain' | 'posttrain' | 'rl' | 'infrastructure' | 'evaluation' | 'cases' | 'op_rmsnorm' | 'op_kda' | 'op_mla' | 'op_moe' | 'op_attnres' | 'op_unembed';
+type Tab = 'overview' | 'kda' | 'attnres' | 'moe' | 'vision' | 'multimodal' | 'muon' | 'pretrain' | 'posttrain' | 'rl' | 'infrastructure' | 'evaluation' | 'cases' | 'op_rmsnorm' | 'op_kda' | 'op_mla' | 'op_rope' | 'op_moe' | 'op_attnres' | 'op_unembed';
 
 type NavSection = {
   title: string;
@@ -32,11 +33,12 @@ const navSections: NavSection[] = [
       { id: 'op_rmsnorm', label: '§2.2 RMSNorm Operator' },
       { id: 'kda', label: '§2.3 KDA Gated Delta Attention' },
       { id: 'op_mla', label: '§2.4 MLA Latent Attention' },
-      { id: 'moe', label: '§2.5 Stable LatentMoE' },
-      { id: 'vision', label: '§2.6 MoonViT Native Vision' },
-      { id: 'attnres', label: '§2.7 AttnRes Cross-Layer Retrieval' },
-      { id: 'muon', label: '§2.8 Per-Head Muon Optimizer' },
-      { id: 'op_unembed', label: '§2.9 Unembedding Output Head' },
+      { id: 'op_rope', label: '§2.5 RoPE Rotary Position Encoding' },
+      { id: 'moe', label: '§2.6 Stable LatentMoE' },
+      { id: 'vision', label: '§2.7 MoonViT Native Vision' },
+      { id: 'attnres', label: '§2.8 AttnRes Cross-Layer Retrieval' },
+      { id: 'muon', label: '§2.9 Per-Head Muon Optimizer' },
+      { id: 'op_unembed', label: '§2.10 Unembedding Output Head' },
     ],
   },
   { title: 'Chapter 3: Pre-training', items: [{ id: 'pretrain', label: 'Data and Training' }] },
@@ -72,6 +74,7 @@ const getTabContent = (activeTab: Tab, onNavigate: (tab: Tab) => void): React.Re
     op_mla: <MLAOperatorDeepDive />,
     op_moe: <MoEOperatorDeepDive />,
     op_attnres: <AttnResOperatorDeepDive />,
+    op_rope: <RoPEOperatorDeepDive />,
     op_unembed: <UnembeddingOperatorDeepDive />,
   };
   return tabMap[activeTab];
