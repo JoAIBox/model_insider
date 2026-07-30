@@ -32,14 +32,14 @@ export const MLAOperatorDeepDive: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.8rem' }}>🧠</span>
             <h2 style={{ fontSize: '1.6rem', color: '#FFF', margin: 0, fontWeight: 'bold' }}>
-              MLA (Multi-Head Latent Attention) 隐空间多头注意力——全图形解密
+              MLA (Multi-Head Latent Attention) 完整全景架构图与维度推导
             </h2>
             <span style={{ background: 'rgba(167, 139, 250, 0.15)', color: '#A78BFA', border: '1px solid #A78BFA', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-              Low-Rank Latent Compression & Matrix Absorption
+              Residual Highway + Low-Rank KV + Decoupled RoPE
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            用<b>图形与几何结构</b>拆解核心哲学：<b>主干残差直通 (7,168 维无损)</b> vs <b>旁路低秩压缩 (512 维低显存)</b>！
+            彻底整合：<b>主干残差直通 (7,168维)</b>、<b>纯语义低秩隐空间 (512维)</b> 与 <b>RoPE 旋转位置解耦 (64维)</b> 全流程矢量架构全景图！
           </p>
         </div>
 
@@ -58,7 +58,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            0. 🛣️ 残差公路 vs 旁路压缩 (核心解密)
+            0. 🛣️ MLA 完整大一统全景架构图
           </button>
           <button
             onClick={() => setActiveTab('pipeline')}
@@ -73,7 +73,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            1. 🖼️ 矩阵图形化压缩管道
+            1. 🖼️ 隐空间压缩细节
           </button>
           <button
             onClick={() => setActiveTab('matrixAbsorption')}
@@ -103,7 +103,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            3. 🧩 语义 vs 位置解耦双路图
+            3. 🧩 语义与 RoPE 解耦细节
           </button>
           <button
             onClick={() => setActiveTab('memoryCalculator')}
@@ -118,126 +118,161 @@ export const MLAOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            4. 📊 显存体积直观柱状图
+            4. 📊 显存体积对比
           </button>
         </div>
       </div>
 
-      {/* TAB 0: RESIDUAL HIGHWAY VS LATENT SUBPATH PHILOSOPHY (NEW KEY FEATURE!) */}
+      {/* TAB 0: MASTER COMPLETE ARCHITECTURE DIAGRAM (WITH RESIDUAL + SEMANTICS + ROPE) */}
       {activeTab === 'philosophy' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '1.4rem' }}>💡</span>
+              <span style={{ fontSize: '1.4rem' }}>🏛️</span>
               <h3 style={{ fontSize: '1.3rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                核心架构解密：主干残差公路 (7,168 维直通) vs 旁路低维压缩工坊 (512 维降维)
+                MLA 完整大一统架构图：残差高速公路 + 纯语义低秩隐空间 + RoPE 位置解耦
               </h3>
             </div>
             <p style={{ color: '#E2E8F0', fontSize: '1.05rem', margin: 0, lineHeight: '1.6' }}>
-              <b>回答核心困惑：MLA 的输出不是 576 维，而是恢复为完整的 7,168 维！</b><br />
-              主干残差通道（Residual Highway）就像一条<b>不缩小的 7,168 维超大高速公路</b>，全过程 100% 保留模型完整信息与记忆；MLA 算子仅仅是在旁路“偷瞄”一眼，拉出 <b>512 维低隐向量做低显存 KV 检索</b>，算出增量更新后再<b>升维映射回 7,168 维叠加回主干公路</b>！
+              下图完整绘制了 MLA 的三条并行数据路径：<b>最上方的 7,168 维残差直通公路</b>、<b>中间的 512 维纯语义低秩压缩旁路</b>、以及<b>最下方的 64 维 RoPE 旋转位置编码解耦旁路</b>。完整标注每一阶段的 Tensor 维数！
             </p>
           </div>
 
-          {/* SVG Diagram showing Main Highway vs Side Branch Bottleneck */}
+          {/* MASTER SVG FLOWCHART */}
           <div style={{ background: '#070913', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
             
-            <svg viewBox="0 0 940 380" width="100%" height="380" style={{ overflow: 'visible' }}>
+            <svg viewBox="0 0 980 480" width="100%" height="480" style={{ overflow: 'visible' }}>
               <defs>
-                <linearGradient id="gradient-highway" x1="0" y1="0" x2="1" y2="0">
+                <linearGradient id="grad-highway" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="#38BDF8" />
                   <stop offset="100%" stopColor="#00F2FE" />
                 </linearGradient>
-                <marker id="arrow-blue-philosophy" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="arrow-master-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                   <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#00F2FE" />
+                </marker>
+                <marker id="arrow-master-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#A78BFA" />
+                </marker>
+                <marker id="arrow-master-amber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#F59E0B" />
+                </marker>
+                <marker id="arrow-master-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10B981" />
                 </marker>
               </defs>
 
-              {/* 1. INPUT NODE (7,168-d) */}
-              <rect x="20" y="140" width="120" height="70" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth="2.5" />
-              <text x="80" y="170" fill="#FFF" fontSize="15" fontWeight="bold" textAnchor="middle">输入 x_t</text>
-              <text x="80" y="192" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
+              {/* === TRACK 1: MAIN RESIDUAL HIGHWAY (TOP PATH) === */}
+              <g>
+                <rect x="20" y="40" width="110" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="2" />
+                <text x="75" y="62" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">输入 x_t</text>
+                <text x="75" y="80" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
 
-              {/* 2. MAIN RESIDUAL HIGHWAY (TOP PATH - UNTOUCHED 7,168-D STRAIGHT THROUGH) */}
-              <path d="M 140 160 L 800 160" stroke="url(#gradient-highway)" strokeWidth="6" fill="none" markerEnd="url(#arrow-blue-philosophy)" />
-              <rect x="300" y="125" width="280" height="28" rx="14" fill="#070913" stroke="#00F2FE" strokeWidth="1.5" />
-              <text x="440" y="144" fill="#00F2FE" fontSize="12" fontWeight="bold" textAnchor="middle">
-                🛣️ 7,168 维主干残差高速公路 (无损直通，一维不少!)
-              </text>
+                {/* Main Highway Line */}
+                <path d="M 130 65 L 830 65" stroke="url(#grad-highway)" strokeWidth="5" fill="none" markerEnd="url(#arrow-master-blue)" />
+                <rect x="340" y="40" width="280" height="24" rx="12" fill="#070913" stroke="#00F2FE" strokeWidth="1.5" />
+                <text x="480" y="56" fill="#00F2FE" fontSize="11" fontWeight="bold" textAnchor="middle">
+                  🛣️ 7,168 维主干残差直通通道 (信息 100% 保留)
+                </text>
+              </g>
 
-              {/* 3. SIDE-BRANCH PROJECTION (BOTTOM PATH - MLA BOTTLENECK) */}
-              <path d="M 140 185 C 190 280, 200 280, 250 280" stroke="#A78BFA" strokeWidth="2.5" fill="none" />
+              {/* SPLIT POINT FROM HIGHWAY TO MLA SIDE-BRANCH */}
+              <path d="M 130 80 L 170 180" stroke="#A78BFA" strokeWidth="2" fill="none" />
+              <circle cx="170" cy="180" r="4" fill="#A78BFA" />
+
+              {/* RMSNORM NODE */}
+              <rect x="170" y="155" width="90" height="50" rx="6" fill="#0F172A" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+              <text x="215" y="178" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle">RMSNorm</text>
+              <text x="215" y="195" fill="#94A3B8" fontSize="10" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
+
+              {/* === TRACK 2: PURE SEMANTIC LATENT PATH (MIDDLE TRACK) === */}
+              {/* Split into Semantic Latent Projection */}
+              <path d="M 260 170 L 300 170" stroke="#A78BFA" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-purple)" />
+              <rect x="300" y="145" width="160" height="50" rx="6" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
+              <text x="380" y="167" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">语义降维 c_t^KV = W_dkv · x</text>
+              <text x="380" y="185" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">c_t^KV ∈ ℝ^512</text>
+
+              {/* === TRACK 3: DECOUPLED ROPE POSITIONAL PATH (BOTTOM TRACK) === */}
+              <path d="M 260 190 C 260 320, 270 320, 300 320" stroke="#F59E0B" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-amber)" />
+              <rect x="300" y="295" width="160" height="50" rx="6" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
+              <text x="380" y="317" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">RoPE 位置 k_t^R = RoPE(W_kr x)</text>
+              <text x="380" y="335" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">k_t^R ∈ ℝ^64</text>
+
+              {/* HIGHLIGHT DASHED BOX FOR STORED KV CACHE */}
+              <rect x="290" y="125" width="180" height="235" rx="8" fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="5,4" />
+              <text x="380" y="375" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">💾 显存 KV Cache 存储体积</text>
+              <text x="380" y="390" fill="#10B981" fontSize="10" textAnchor="middle">(512 维语义 + 64 维位置 = 576 维)</text>
+
+              {/* QUERY PROJECTION & UNPROJECTION TO MULTI-HEAD CONTEXT */}
+              <path d="M 460 170 L 520 170" stroke="#A78BFA" strokeWidth="2" fill="none" />
+              <path d="M 460 320 L 520 320" stroke="#F59E0B" strokeWidth="2" fill="none" />
+
+              {/* DOT PRODUCT & MULTI-HEAD ATTENTION SCORE NODE */}
+              <g>
+                <rect x="520" y="145" width="170" height="200" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="#38BDF8" strokeWidth="2" />
+                <text x="605" y="170" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">多头 Softmax 点积 & 聚合</text>
+
+                <text x="605" y="195" fill="#A78BFA" fontSize="11" textAnchor="middle">语义得分: q_t^C · (W_uk c_j^KV)^T</text>
+                <text x="605" y="215" fill="#F59E0B" fontSize="11" textAnchor="middle">位置得分: q_t^R · (k_j^R)^T</text>
+                
+                <line x1="535" y1="230" x2="675" y2="230" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                
+                <text x="605" y="250" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle">聚合 Context o_t</text>
+                <text x="605" y="268" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">o_t ∈ ℝ^[96 × 128]</text>
+                <text x="605" y="285" fill="#94A3B8" fontSize="10" textAnchor="middle">(96 个头，每个头 128 维)</text>
+                <text x="605" y="302" fill="#94A3B8" fontSize="10" textAnchor="middle">总隐藏尺寸 = 12,288 维</text>
+                <text x="605" y="325" fill="#38BDF8" fontSize="10" fontWeight="bold" textAnchor="middle">⚡ 启用矩阵吸收时零解压!</text>
+              </g>
+
+              {/* OUTPUT UP-PROJECTION W_o */}
+              <path d="M 690 245 L 730 245" stroke="#38BDF8" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-green)" />
+              <g>
+                <rect x="730" y="220" width="130" height="50" rx="6" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="2" />
+                <text x="795" y="242" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">输出升维投影 W_o</text>
+                <text x="795" y="260" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Δy ∈ ℝ^7,168</text>
+              </g>
+
+              {/* RE-CONVERGENCE UP TO RESIDUAL HIGHWAY */}
+              <path d="M 860 245 C 865 245, 865 85, 865 80" stroke="#10B981" strokeWidth="2.5" fill="none" />
               
-              {/* Bottleneck Node 1: Compression */}
-              <g>
-                <rect x="250" y="245" width="150" height="70" rx="8" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
-                <text x="325" y="272" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">1. 旁路低秩降维 W_dkv</text>
-                <text x="325" y="295" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="monospace">c_t^KV ∈ ℝ^512</text>
-                <text x="325" y="308" fill="#94A3B8" fontSize="10" textAnchor="middle">(省显存的 KV 检索档案)</text>
-              </g>
+              {/* SUMMATION NODE */}
+              <circle cx="865" cy="65" r="16" fill="#10B981" stroke="#FFF" strokeWidth="2" />
+              <text x="865" y="71" fill="#000" fontSize="20" fontWeight="bold" textAnchor="middle">+</text>
+              <text x="865" y="35" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">残差加回 (Addition)</text>
 
-              <line x1="400" y1="280" x2="440" y2="280" stroke="#A78BFA" strokeWidth="2" />
-
-              {/* Bottleneck Node 2: Attention Computation */}
-              <g>
-                <rect x="440" y="245" width="160" height="70" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="2" />
-                <text x="520" y="272" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">2. 注意力低显存点积</text>
-                <text x="520" y="295" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="monospace">o_t ∈ ℝ^12,288</text>
-                <text x="520" y="308" fill="#94A3B8" fontSize="10" textAnchor="middle">(96 头 × 128 维)</text>
-              </g>
-
-              <line x1="600" y1="280" x2="640" y2="280" stroke="#10B981" strokeWidth="2" />
-
-              {/* Bottleneck Node 3: Up-projection */}
-              <g>
-                <rect x="640" y="245" width="160" height="70" rx="8" fill="rgba(56, 189, 248, 0.15)" stroke="#38BDF8" strokeWidth="2" />
-                <text x="720" y="272" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">3. 输出升维映射 W_o</text>
-                <text x="720" y="295" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Δy ∈ ℝ^7,168</text>
-                <text x="720" y="308" fill="#38BDF8" fontSize="10" fontWeight="bold" textAnchor="middle">(成功恢复为 7,168 维!)</text>
-              </g>
-
-              {/* RE-CONVERGENCE UP TO HIGHWAY */}
-              <path d="M 800 280 C 825 280, 830 200, 830 185" stroke="#38BDF8" strokeWidth="2.5" fill="none" />
-              
-              {/* SUMMATION CIRCLE */}
-              <circle cx="830" cy="160" r="16" fill="#10B981" stroke="#FFF" strokeWidth="2" />
-              <text x="830" y="166" fill="#000" fontSize="20" fontWeight="bold" textAnchor="middle">+</text>
-              <text x="830" y="132" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">残差加回 (Addition)</text>
-
-              {/* 4. OUTPUT NODE (7,168-d) */}
-              <line x1="846" y1="160" x2="890" y2="160" stroke="#10B981" strokeWidth="3" />
-              <rect x="890" y="135" width="45" height="50" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="2" />
-              <text x="912.5" y="160" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">h_l+1</text>
-              <text x="912.5" y="175" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">7168d</text>
+              {/* FINAL OUTPUT NODE (7,168-d) */}
+              <line x1="881" y1="65" x2="925" y2="65" stroke="#10B981" strokeWidth="3" />
+              <rect x="925" y="40" width="45" height="50" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="2" />
+              <text x="947.5" y="64" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">h_l+1</text>
+              <text x="947.5" y="80" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">7168d</text>
 
             </svg>
 
             {/* Stage Dimension Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', width: '100%' }}>
               
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #38BDF8' }}>
-                <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>① 主干输入维度</span>
+                <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>1. 主干输入维度</span>
                 <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>x_t ∈ ℝ^7,168</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>无损通过残差公路直通下一层</p>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>100% 原始信息沿残差公路无损直通</p>
               </div>
 
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #A78BFA' }}>
-                <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>② 旁路压缩瓶颈维度</span>
-                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>c_t^KV ∈ ℝ^512</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>仅在旁路用于超低显存 KV 检索</p>
+                <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>2. 旁路 KV 缓存维度</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>512d 语义 + 64d RoPE</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>旁路低秩存入显存，显存暴降 42 倍</p>
+              </div>
+
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #F59E0B' }}>
+                <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>3. 旁路多头上下文维度</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>o_t ∈ ℝ^[96 × 128]</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>聚合生成的 96 头注意力向量 (12,288d)</p>
               </div>
 
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #10B981' }}>
-                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>③ 旁路升维更新量</span>
-                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>Δy ∈ ℝ^7,168</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>通过 W_o 成功还原恢复为 7,168 维</p>
-              </div>
-
-              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #00F2FE' }}>
-                <span style={{ color: '#00F2FE', fontWeight: 'bold', fontSize: '0.95rem' }}>④ 最终残差输出维度</span>
+                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>4. 最终残差叠加输出维度</span>
                 <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>h_l+1 ∈ ℝ^7,168</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>x_t + Δy 融合，维度一维不少！</p>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>W_o 升维还原后加回主干，维度完全恢复！</p>
               </div>
 
             </div>
