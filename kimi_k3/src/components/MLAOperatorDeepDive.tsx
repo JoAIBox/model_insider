@@ -6,7 +6,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
   const [ropeDim] = useState<number>(64); // Decoupled RoPE dimension d_r
   const [contextLength, setContextLength] = useState<number>(128000); // 128K context length
   const [batchSize, setBatchSize] = useState<number>(4);
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'matrixAbsorption' | 'ropeDecouple' | 'memoryCalculator'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'philosophy' | 'pipeline' | 'matrixAbsorption' | 'ropeDecouple' | 'memoryCalculator'>('philosophy');
   const [selectedStage, setSelectedStage] = useState<'input' | 'compress' | 'rope' | 'absorption' | 'unproject'>('compress');
   const [isAbsorbed, setIsAbsorbed] = useState<boolean>(true); // Matrix absorption toggle animation state
 
@@ -39,12 +39,27 @@ export const MLAOperatorDeepDive: React.FC = () => {
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            抛弃枯燥公式！用<b>图形与几何结构</b>拆解 MLA 如何把 24,576 维的巨型多头矩阵压缩成 512 维隐向量，并在推理阶段实现零解压直连点积！
+            用<b>图形与几何结构</b>拆解核心哲学：<b>主干残差直通 (7,168 维无损)</b> vs <b>旁路低秩压缩 (512 维低显存)</b>！
           </p>
         </div>
 
         {/* Tab Navigation */}
         <div style={{ display: 'flex', gap: '8px', background: '#070913', padding: '6px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => setActiveTab('philosophy')}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '6px',
+              border: 'none',
+              background: activeTab === 'philosophy' ? 'linear-gradient(135deg, #38BDF8 0%, #00F2FE 100%)' : 'transparent',
+              color: activeTab === 'philosophy' ? '#000' : '#94A3B8',
+              fontWeight: 'bold',
+              fontSize: '0.95rem',
+              cursor: 'pointer'
+            }}
+          >
+            0. 🛣️ 残差公路 vs 旁路压缩 (核心解密)
+          </button>
           <button
             onClick={() => setActiveTab('pipeline')}
             style={{
@@ -108,6 +123,142 @@ export const MLAOperatorDeepDive: React.FC = () => {
         </div>
       </div>
 
+      {/* TAB 0: RESIDUAL HIGHWAY VS LATENT SUBPATH PHILOSOPHY (NEW KEY FEATURE!) */}
+      {activeTab === 'philosophy' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.4rem' }}>💡</span>
+              <h3 style={{ fontSize: '1.3rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
+                核心架构解密：主干残差公路 (7,168 维直通) vs 旁路低维压缩工坊 (512 维降维)
+              </h3>
+            </div>
+            <p style={{ color: '#E2E8F0', fontSize: '1.05rem', margin: 0, lineHeight: '1.6' }}>
+              <b>回答核心困惑：MLA 的输出不是 576 维，而是恢复为完整的 7,168 维！</b><br />
+              主干残差通道（Residual Highway）就像一条<b>不缩小的 7,168 维超大高速公路</b>，全过程 100% 保留模型完整信息与记忆；MLA 算子仅仅是在旁路“偷瞄”一眼，拉出 <b>512 维低隐向量做低显存 KV 检索</b>，算出增量更新后再<b>升维映射回 7,168 维叠加回主干公路</b>！
+            </p>
+          </div>
+
+          {/* SVG Diagram showing Main Highway vs Side Branch Bottleneck */}
+          <div style={{ background: '#070913', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            
+            <svg viewBox="0 0 940 380" width="100%" height="380" style={{ overflow: 'visible' }}>
+              <defs>
+                <linearGradient id="gradient-highway" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#38BDF8" />
+                  <stop offset="100%" stopColor="#00F2FE" />
+                </linearGradient>
+                <marker id="arrow-blue-philosophy" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#00F2FE" />
+                </marker>
+              </defs>
+
+              {/* 1. INPUT NODE (7,168-d) */}
+              <rect x="20" y="140" width="120" height="70" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth="2.5" />
+              <text x="80" y="170" fill="#FFF" fontSize="15" fontWeight="bold" textAnchor="middle">输入 x_t</text>
+              <text x="80" y="192" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
+
+              {/* 2. MAIN RESIDUAL HIGHWAY (TOP PATH - UNTOUCHED 7,168-D STRAIGHT THROUGH) */}
+              <path d="M 140 160 L 800 160" stroke="url(#gradient-highway)" strokeWidth="6" fill="none" markerEnd="url(#arrow-blue-philosophy)" />
+              <rect x="300" y="125" width="280" height="28" rx="14" fill="#070913" stroke="#00F2FE" strokeWidth="1.5" />
+              <text x="440" y="144" fill="#00F2FE" fontSize="12" fontWeight="bold" textAnchor="middle">
+                🛣️ 7,168 维主干残差高速公路 (无损直通，一维不少!)
+              </text>
+
+              {/* 3. SIDE-BRANCH PROJECTION (BOTTOM PATH - MLA BOTTLENECK) */}
+              <path d="M 140 185 C 190 280, 200 280, 250 280" stroke="#A78BFA" strokeWidth="2.5" fill="none" />
+              
+              {/* Bottleneck Node 1: Compression */}
+              <g>
+                <rect x="250" y="245" width="150" height="70" rx="8" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
+                <text x="325" y="272" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">1. 旁路低秩降维 W_dkv</text>
+                <text x="325" y="295" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="monospace">c_t^KV ∈ ℝ^512</text>
+                <text x="325" y="308" fill="#94A3B8" fontSize="10" textAnchor="middle">(省显存的 KV 检索档案)</text>
+              </g>
+
+              <line x1="400" y1="280" x2="440" y2="280" stroke="#A78BFA" strokeWidth="2" />
+
+              {/* Bottleneck Node 2: Attention Computation */}
+              <g>
+                <rect x="440" y="245" width="160" height="70" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="2" />
+                <text x="520" y="272" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">2. 注意力低显存点积</text>
+                <text x="520" y="295" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="monospace">o_t ∈ ℝ^12,288</text>
+                <text x="520" y="308" fill="#94A3B8" fontSize="10" textAnchor="middle">(96 头 × 128 维)</text>
+              </g>
+
+              <line x1="600" y1="280" x2="640" y2="280" stroke="#10B981" strokeWidth="2" />
+
+              {/* Bottleneck Node 3: Up-projection */}
+              <g>
+                <rect x="640" y="245" width="160" height="70" rx="8" fill="rgba(56, 189, 248, 0.15)" stroke="#38BDF8" strokeWidth="2" />
+                <text x="720" y="272" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">3. 输出升维映射 W_o</text>
+                <text x="720" y="295" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Δy ∈ ℝ^7,168</text>
+                <text x="720" y="308" fill="#38BDF8" fontSize="10" fontWeight="bold" textAnchor="middle">(成功恢复为 7,168 维!)</text>
+              </g>
+
+              {/* RE-CONVERGENCE UP TO HIGHWAY */}
+              <path d="M 800 280 C 825 280, 830 200, 830 185" stroke="#38BDF8" strokeWidth="2.5" fill="none" />
+              
+              {/* SUMMATION CIRCLE */}
+              <circle cx="830" cy="160" r="16" fill="#10B981" stroke="#FFF" strokeWidth="2" />
+              <text x="830" y="166" fill="#000" fontSize="20" fontWeight="bold" textAnchor="middle">+</text>
+              <text x="830" y="132" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">残差加回 (Addition)</text>
+
+              {/* 4. OUTPUT NODE (7,168-d) */}
+              <line x1="846" y1="160" x2="890" y2="160" stroke="#10B981" strokeWidth="3" />
+              <rect x="890" y="135" width="45" height="50" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="2" />
+              <text x="912.5" y="160" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">h_l+1</text>
+              <text x="912.5" y="175" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">7168d</text>
+
+            </svg>
+
+            {/* Stage Dimension Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', width: '100%' }}>
+              
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #38BDF8' }}>
+                <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>① 主干输入维度</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>x_t ∈ ℝ^7,168</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>无损通过残差公路直通下一层</p>
+              </div>
+
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #A78BFA' }}>
+                <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>② 旁路压缩瓶颈维度</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>c_t^KV ∈ ℝ^512</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>仅在旁路用于超低显存 KV 检索</p>
+              </div>
+
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #10B981' }}>
+                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>③ 旁路升维更新量</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>Δy ∈ ℝ^7,168</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>通过 W_o 成功还原恢复为 7,168 维</p>
+              </div>
+
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #00F2FE' }}>
+                <span style={{ color: '#00F2FE', fontWeight: 'bold', fontSize: '0.95rem' }}>④ 最终残差输出维度</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>h_l+1 ∈ ℝ^7,168</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>x_t + Δy 融合，维度一维不少！</p>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Theoretical Summary Box */}
+          <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <h4 style={{ color: '#FFF', margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>
+              总结：为什么不在 Tokenizer 入口直接用 512 维？
+            </h4>
+            <ul style={{ color: '#94A3B8', fontSize: '0.98rem', lineHeight: '1.6', margin: 0, paddingLeft: '20px' }}>
+              <li><b>词表空间容积 (Vocabulary Capacity)</b>：Kimi K3 词表有 160,000 个 Token。在 512 维空间里装 16 万个词向量会导致严重拥挤混淆，只有在 7,168 维的高维正交空间里才能保持清晰的线性可分性。</li>
+              <li><b>全局知识库 vs 局部检索便签</b>：7,168 维主干负责承载 2.78 万亿参数巨量知识与多模态表征；512 维只是查阅历史资料时临时抽出的关键词便签。</li>
+              <li><b>高低维相间动态呼吸</b>：通过“高维主干直通 + 旁路低维降维算子”，大模型在保持极致表征力的同时，成功将 KV Cache 显存体积降低了 42.6 倍！</li>
+            </ul>
+          </div>
+
+        </div>
+      )}
+
       {/* TAB 1: GRAPHIC TENSOR COMPRESSION PIPELINE */}
       {activeTab === 'pipeline' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -149,8 +300,8 @@ export const MLAOperatorDeepDive: React.FC = () => {
               </g>
 
               {/* CONNECTOR ARROW 1: TO COMPRESSION MATRIX */}
-              <path d="M 70 120 L 140 120" stroke="#A78BFA" strokeWidth="2" fill="none" markerEnd="url(#arrow-mla-purple)" />
-              <path d="M 70 240 L 140 240" stroke="#F59E0B" strokeWidth="2" fill="none" markerEnd="url(#arrow-mla-amber)" />
+              <line x1="70" y1="120" x2="140" y2="120" stroke="#A78BFA" strokeWidth="2" />
+              <line x1="70" y1="240" x2="140" y2="240" stroke="#F59E0B" strokeWidth="2" />
 
               {/* SECTION 2: COMPRESSION MATRIX BLOCKS */}
               {/* Top: W_dkv Matrix Funnel */}
@@ -215,7 +366,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
             </svg>
 
             {/* Bottom Interactive Stage Explanation Card */}
-            <div style={{ background: '#0F172A', padding: '16px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.3)' }}>
+            <div style={{ background: '#0F172A', padding: '16px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.3)', width: '100%' }}>
               {selectedStage === 'input' && (
                 <div>
                   <h4 style={{ color: '#38BDF8', margin: '0 0 6px 0', fontSize: '1.1rem' }}>1. 高维输入向量 x_t (7,168 维)</h4>
