@@ -80,19 +80,39 @@ const nodes: ArchitectureNode[] = [
   },
 ];
 
-export const MacroArchitectureFlow: React.FC = () => {
+interface MacroArchitectureFlowProps {
+  onNavigateTab?: (tab: any) => void;
+}
+
+export const MacroArchitectureFlow: React.FC<MacroArchitectureFlowProps> = ({ onNavigateTab }) => {
   const [selectedId, setSelectedId] = useState('attention');
   const [openOperator, setOpenOperator] = useState<string | null>(null);
   const selected = nodes.find((node) => node.id === selectedId) ?? nodes[0];
 
+  const nodeTabMapping: Record<string, any> = {
+    input: 'multimodal',
+    attention: 'kda',
+    attnres: 'op_attnres',
+    moe: 'op_moe',
+    head: 'op_unembed',
+  };
+
   return (
     <section className="card architecture-flow" aria-labelledby="architecture-flow-title">
       <div className="card-title" id="architecture-flow-title">🧭 System architecture: how one token moves through Kimi K3</div>
-      <p className="flow-intro">Every card distinguishes published figures from undisclosed ones. Select a module to reveal its operator-level data path and published dimensions.</p>
+      <p className="flow-intro">Every card distinguishes published figures from undisclosed ones. Select a module to reveal its operator-level data path and published dimensions. (💡 单击查看初步概要 | 双击直接跳转详细算法推导)</p>
       <div className="flow-track" role="list">
         {nodes.map((node, index) => (
           <React.Fragment key={node.id}>
-            <button className={`flow-node ${selectedId === node.id ? 'active' : ''}`} onClick={() => { setSelectedId(node.id); setOpenOperator(null); }} style={{ '--node-color': node.color } as React.CSSProperties} role="listitem" aria-pressed={selectedId === node.id}>
+            <button
+              className={`flow-node ${selectedId === node.id ? 'active' : ''}`}
+              onClick={() => { setSelectedId(node.id); setOpenOperator(null); }}
+              onDoubleClick={() => onNavigateTab?.(nodeTabMapping[node.id])}
+              style={{ '--node-color': node.color } as React.CSSProperties}
+              role="listitem"
+              aria-pressed={selectedId === node.id}
+              title="单击: 切换初步概要 | 双击: 直接跳转详细推导"
+            >
               <span className="flow-step">{node.step}</span>
               <strong>{node.title}</strong>
               <span>{node.summary}</span>

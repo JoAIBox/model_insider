@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 interface TokenInputAnimationProps {
   mode?: 'multimodal' | 'layer';
   layerId?: number;
+  onNavigateTab?: (tab: any) => void;
 }
 
-export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode = 'multimodal', layerId = 1 }) => {
+export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode = 'multimodal', layerId = 1, onNavigateTab }) => {
   const [hoveredPart, setHoveredPart] = useState<string | null>(null);
 
   if (mode === 'layer') {
@@ -17,9 +18,7 @@ export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode =
             📥 Layer Input State h_{layerId}
           </h4>
           <p style={{ fontSize: '1.08rem', color: '#94A3B8', lineHeight: '1.5', margin: '0' }}>
-            Layer {layerId} directly receives the merged hidden state sequence <b>h_{layerId} ∈ ℝ^(T × 7,168)</b> output by the previous layer.
-            In this vector sequence, the text and vision token features have already been arranged sequentially (interleaved chronologically/spatially).
-            They are processed as a whole by the attention mechanisms (MLA/KDA) and MoE expert networks in the current layer.
+            Layer {layerId} directly receives the merged hidden state sequence <b>h_{layerId} ∈ ℝ^(T × 7,168)</b> output by the previous layer. (💡 单击查看初步概要 | 双击直接跳转详细算法推导)
           </p>
         </div>
 
@@ -47,24 +46,16 @@ export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode =
             <line x1="550" y1="60" x2="610" y2="60" stroke="#10B981" strokeWidth="1.5" markerEnd="url(#arrow-green)" />
 
             {/* Previous Layer Output */}
-            <rect x="10" y="30" width="100" height="60" rx="6" fill="#0F172A" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
-            <text x="60" y="56" fill="#64748B" fontSize="13" textAnchor="middle">Output from</text>
-            <text x="60" y="74" fill="#94A3B8" fontSize="14" fontWeight="bold" textAnchor="middle">Layer {layerId - 1}</text>
+            <rect x="10" y="30" width="100" height="60" rx="6" fill="#0F172A" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" style={{ cursor: 'pointer' }} onDoubleClick={() => onNavigateTab?.('multimodal')} />
+            <text x="60" y="58" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Layer {layerId - 1} Out</text>
 
             {/* Incoming Hidden State h_l */}
-            <rect x="210" y="30" width="120" height="60" rx="6" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="2" />
-            <text x="270" y="56" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">Input h_{layerId}</text>
-            <text x="270" y="74" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^(T × 7,168)</text>
+            <rect x="210" y="30" width="120" height="60" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="1.5" style={{ cursor: 'pointer' }} onDoubleClick={() => onNavigateTab?.('multimodal')} />
+            <text x="270" y="58" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">Input Sequence h_{layerId}</text>
 
             {/* RMSNorm Operator inside Layer */}
-            <rect x="430" y="30" width="120" height="60" rx="6" fill="#0F172A" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
-            <text x="490" y="56" fill="#FFF" fontSize="14" textAnchor="middle" fontWeight="bold">RMSNorm</text>
-            <text x="490" y="74" fill="#64748B" fontSize="13" textAnchor="middle">Layer Norm</text>
-
-            {/* Rest of the Layer Operators */}
-            <rect x="610" y="30" width="100" height="60" rx="6" fill="#1e293b" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-            <text x="660" y="56" fill="#94A3B8" fontSize="14" textAnchor="middle" fontWeight="bold">Sublayers</text>
-            <text x="660" y="74" fill="#64748B" fontSize="13" textAnchor="middle">Attention & MoE</text>
+            <rect x="430" y="30" width="120" height="60" rx="6" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="1.5" style={{ cursor: 'pointer' }} onDoubleClick={() => onNavigateTab?.('kda')} />
+            <text x="490" y="58" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Layer {layerId} Sublayer</text>
 
             {/* Glowing moving particle representing hidden state flow */}
             <circle r="5" fill="#10B981">
@@ -78,16 +69,16 @@ export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode =
 
   // Otherwise, render the Multimodal Input Stage (Layer 0) Concat animation with sequential interleaving explanation
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', padding: '18px', background: '#02040a', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '18px', background: '#02040a', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
       {/* Description Panel */}
       <div>
         <h4 style={{ fontSize: '1.15rem', color: '#38BDF8', fontWeight: 'bold', margin: '0 0 8px 0' }}>
-          🌟 Multimodal Alignment & Sequence Concatenation Stage (Layer 0) — Integrating Discrete & Continuous Sequences
+          🌐 Multimodal Layer 0 Input Token Alignment & Sequence Interleaving
         </h4>
-        <p style={{ fontSize: '1.08rem', color: '#94A3B8', lineHeight: '1.55', margin: '0' }}>
-          Since images <b>cannot be directly converted into vocabulary indices during the discrete tokenization stage</b>, the model adopts the following design:
-          text is mapped to embeddings via discrete lookup, while images generate continuous feature vectors through MoonViT-V2 and are projected to align with the backbone hidden size (7,168 dimensions).
-          Then, both are spliced (concatenated) along the sequence length dimension according to their <b>chronological order (interleaved layout)</b> in the prompt, forming a unified sequential input feature stream <b>x_t</b>.
+        <p style={{ fontSize: '1.08rem', color: '#94A3B8', lineHeight: '1.5', margin: '0' }}>
+          Text tokens directly undergo discrete vocabulary lookup to generate <b>7,168-dimensional embeddings</b>.
+          Image patches pass through MoonViT-V2, 2×2 Pixel Shuffle space downsampling, and linear projection W_proj to generate continuous <b>7,168-dimensional visual feature vectors</b>.
+          Then, both are spliced along sequence length. (💡 单击查看初步概要 | 双击框图直接跳转详细推导)
         </p>
       </div>
 
@@ -117,20 +108,20 @@ export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode =
           <rect x="15" y="32" width="810" height="36" rx="6" fill="#0A0F1D" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
           
           <text x="30" y="55" fill="#38BDF8" fontSize="14" fontWeight="bold">"Show me this </text>
-          <rect x="145" y="38" width="65" height="24" rx="4" fill="rgba(167, 139, 250, 0.2)" stroke="#A78BFA" strokeWidth="1" />
+          <rect x="145" y="38" width="65" height="24" rx="4" fill="rgba(167, 139, 250, 0.2)" stroke="#A78BFA" strokeWidth="1" style={{ cursor: 'pointer' }} onDoubleClick={() => onNavigateTab?.('vision')} />
           <text x="177.5" y="54" fill="#A78BFA" fontSize="13" textAnchor="middle" fontWeight="bold">[Image]</text>
           <text x="220" y="55" fill="#38BDF8" fontSize="14" fontWeight="bold"> what cat?"</text>
 
           {/* 2. Embedding & Encoder Branch Cards */}
           {/* Prefix Text tokens: "Show me this " */}
-          <g style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredPart('prefix')} onMouseLeave={() => setHoveredPart(null)}>
+          <g style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredPart('prefix')} onMouseLeave={() => setHoveredPart(null)} onDoubleClick={() => onNavigateTab?.('multimodal')}>
             <rect x="15" y="85" width="180" height="65" rx="6" fill="#0F172A" stroke={hoveredPart === 'prefix' ? '#38BDF8' : 'rgba(255,255,255,0.12)'} strokeWidth="1.5" />
             <text x="105" y="112" fill="#38BDF8" fontSize="14" fontWeight="bold" textAnchor="middle">Prefix Text Embedding</text>
             <text x="105" y="134" fill="#94A3B8" fontSize="12" textAnchor="middle" fontFamily="monospace">x_1, x_2, x_3 ∈ ℝ^(3×d)</text>
           </g>
           
           {/* MoonViT Vision Encoder */}
-          <g style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredPart('vision')} onMouseLeave={() => setHoveredPart(null)}>
+          <g style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredPart('vision')} onMouseLeave={() => setHoveredPart(null)} onDoubleClick={() => onNavigateTab?.('vision')}>
             <rect x="215" y="85" width="410" height="65" rx="6" fill="#0F172A" stroke={hoveredPart === 'vision' ? '#A78BFA' : 'rgba(255,255,255,0.12)'} strokeWidth="1.5" />
             <text x="420" y="112" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">
               MoonViT-V2 Encoder + Pixel Shuffle + W_proj
