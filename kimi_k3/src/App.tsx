@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
 import { Dashboard } from './components/Dashboard';
-import { KDASimulator } from './components/KDASimulator';
-import { AttnResSimulator } from './components/AttnResSimulator';
-import { MoESimulator } from './components/MoESimulator';
 import { MoonViTSimulator } from './components/MoonViTSimulator';
 import { PerHeadMuonSimulator } from './components/PerHeadMuonSimulator';
 import { PreTrainingSection } from './components/PreTrainingSection';
@@ -12,8 +9,14 @@ import { InfrastructureDeepDive } from './components/InfrastructureDeepDive';
 import { EvaluationDashboard } from './components/EvaluationDashboard';
 import { CaseStudies } from './components/CaseStudies';
 import { MultimodalTokenSimulator } from './components/MultimodalTokenSimulator';
+import { RMSNormOperatorDeepDive } from './components/RMSNormOperatorDeepDive';
+import { KDAOperatorDeepDive } from './components/KDAOperatorDeepDive';
+import { MLAOperatorDeepDive } from './components/MLAOperatorDeepDive';
+import { MoEOperatorDeepDive } from './components/MoEOperatorDeepDive';
+import { AttnResOperatorDeepDive } from './components/AttnResOperatorDeepDive';
+import { UnembeddingOperatorDeepDive } from './components/UnembeddingOperatorDeepDive';
 
-type Tab = 'overview' | 'kda' | 'attnres' | 'moe' | 'vision' | 'multimodal' | 'muon' | 'pretrain' | 'posttrain' | 'rl' | 'infrastructure' | 'evaluation' | 'cases';
+type Tab = 'overview' | 'kda' | 'attnres' | 'moe' | 'vision' | 'multimodal' | 'muon' | 'pretrain' | 'posttrain' | 'rl' | 'infrastructure' | 'evaluation' | 'cases' | 'op_rmsnorm' | 'op_kda' | 'op_mla' | 'op_moe' | 'op_attnres' | 'op_unembed';
 
 type NavSection = {
   title: string;
@@ -25,12 +28,15 @@ const navSections: NavSection[] = [
   {
     title: 'Chapter 2: Model Architecture',
     items: [
-      { id: 'kda', label: '§2.1 Delta Attention' },
-      { id: 'attnres', label: '§2.2 Attention Residuals' },
-      { id: 'moe', label: '§2.3 Stable LatentMoE' },
-      { id: 'vision', label: '§2.4 Native Vision' },
-      { id: 'multimodal', label: '§2.6 Multimodal Tokenizer' },
-      { id: 'muon', label: '§2.5 Per-Head Muon' },
+      { id: 'multimodal', label: '§2.1 Layer 0 Multimodal Alignment' },
+      { id: 'op_rmsnorm', label: '§2.2 RMSNorm Operator' },
+      { id: 'kda', label: '§2.3 KDA Gated Delta Attention' },
+      { id: 'op_mla', label: '§2.4 MLA Latent Attention' },
+      { id: 'moe', label: '§2.5 Stable LatentMoE' },
+      { id: 'vision', label: '§2.6 MoonViT Native Vision' },
+      { id: 'attnres', label: '§2.7 AttnRes Cross-Layer Retrieval' },
+      { id: 'muon', label: '§2.8 Per-Head Muon Optimizer' },
+      { id: 'op_unembed', label: '§2.9 Unembedding Output Head' },
     ],
   },
   { title: 'Chapter 3: Pre-training', items: [{ id: 'pretrain', label: 'Data and Training' }] },
@@ -46,20 +52,29 @@ const navSections: NavSection[] = [
   { title: 'Chapter 7: Case Studies', items: [{ id: 'cases', label: 'Compiler and Chip Projects' }] },
 ];
 
-const tabContent: Record<Tab, React.ReactNode> = {
-  overview: <Dashboard />,
-  kda: <KDASimulator />,
-  attnres: <AttnResSimulator />,
-  moe: <MoESimulator />,
-  vision: <MoonViTSimulator />,
-  multimodal: <MultimodalTokenSimulator />,
-  muon: <PerHeadMuonSimulator />,
-  pretrain: <PreTrainingSection />,
-  posttrain: <PostTrainingDetails />,
-  rl: <ReasoningSandbox />,
-  infrastructure: <InfrastructureDeepDive />,
-  evaluation: <EvaluationDashboard />,
-  cases: <CaseStudies />,
+const getTabContent = (activeTab: Tab, onNavigate: (tab: Tab) => void): React.ReactNode => {
+  const tabMap: Record<Tab, React.ReactNode> = {
+    overview: <Dashboard onNavigateTab={onNavigate} />,
+    kda: <KDAOperatorDeepDive />,
+    attnres: <AttnResOperatorDeepDive />,
+    moe: <MoEOperatorDeepDive />,
+    vision: <MoonViTSimulator />,
+    multimodal: <MultimodalTokenSimulator />,
+    muon: <PerHeadMuonSimulator />,
+    pretrain: <PreTrainingSection />,
+    posttrain: <PostTrainingDetails />,
+    rl: <ReasoningSandbox />,
+    infrastructure: <InfrastructureDeepDive />,
+    evaluation: <EvaluationDashboard />,
+    cases: <CaseStudies />,
+    op_rmsnorm: <RMSNormOperatorDeepDive />,
+    op_kda: <KDAOperatorDeepDive />,
+    op_mla: <MLAOperatorDeepDive />,
+    op_moe: <MoEOperatorDeepDive />,
+    op_attnres: <AttnResOperatorDeepDive />,
+    op_unembed: <UnembeddingOperatorDeepDive />,
+  };
+  return tabMap[activeTab];
 };
 
 const App: React.FC = () => {
@@ -108,7 +123,7 @@ const App: React.FC = () => {
       </aside>
 
       <main className="content-area" id="main-content" tabIndex={-1}>
-        {tabContent[activeTab]}
+        {getTabContent(activeTab, setActiveTab)}
       </main>
     </div>
   );

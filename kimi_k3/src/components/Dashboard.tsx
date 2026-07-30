@@ -102,7 +102,11 @@ interface LayerItem {
   isInputStage?: boolean;
 }
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onNavigateTab?: (tab: any) => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
   // Generate 93 layers (Layer 1 to 93)
   const layers: LayerItem[] = Array.from({ length: 93 }, (_, idx) => {
     const layerNum = idx + 1;
@@ -826,9 +830,14 @@ Directly reads representations from historical block boundaries using an attenti
                     <>
                       {/* Layer 0 Step 1: Text Embedding */}
                       <div style={{ border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '6px', padding: '14px', background: 'rgba(56, 189, 248, 0.02)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', paddingBottom: '8px' }}>
-                          <span>1. Text Tokenization & Embedding</span>
-                          <span style={{ color: '#38BDF8' }}>Text Input Stage</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', paddingBottom: '8px' }}>
+                          <span>1. Text & Vision Multimodal Alignment (Layer 0)</span>
+                          <button
+                            onClick={() => onNavigateTab?.('multimodal')}
+                            style={{ background: 'linear-gradient(135deg, #38BDF8 0%, #A78BFA 100%)', border: 'none', color: '#000', padding: '6px 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.92rem', cursor: 'pointer' }}
+                          >
+                            🚀 点击跳转：§8.1 / §2.6 多模态 Tokenizer 详细原理动画与推导
+                          </button>
                         </div>
                         <div>
                           <span style={{ fontSize: '1.08rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
@@ -958,11 +967,28 @@ X = [X_prefix, X_vision, X_suffix]`}
                     <>
                       {/* Step 1: Input & Attention Sub-layer */}
                       <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', padding: '14px', background: 'rgba(255,255,255,0.01)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
                           <span>1. Attention sub-layer</span>
-                          <span style={{ color: selectedLayer.type === 'KDA' ? '#00F2FE' : '#C084FC' }}>
-                            {selectedLayer.type === 'KDA' ? 'KDA decay and delta-update gates' : 'Gated MLA (24 layers)'}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ color: selectedLayer.type === 'KDA' ? '#00F2FE' : '#C084FC' }}>
+                              {selectedLayer.type === 'KDA' ? 'KDA decay and delta-update gates' : 'Gated MLA (24 layers)'}
+                            </span>
+                            <button
+                              onClick={() => onNavigateTab?.(selectedLayer.type === 'KDA' ? 'op_kda' : 'op_mla')}
+                              style={{
+                                background: selectedLayer.type === 'KDA' ? 'linear-gradient(135deg, #00F2FE 0%, #38BDF8 100%)' : 'linear-gradient(135deg, #A78BFA 0%, #C084FC 100%)',
+                                border: 'none',
+                                color: '#000',
+                                padding: '5px 12px',
+                                borderRadius: '6px',
+                                fontWeight: 'bold',
+                                fontSize: '0.88rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🚀 跳转：{selectedLayer.type === 'KDA' ? '§8.3 KDA原理剖析' : '§8.4 MLA原理剖析'}
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '1.08rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
@@ -1029,11 +1055,30 @@ y_t = W_o * (Sigmoid(W_g * x_t) ⊙ õ_t)`}
 
                       {/* Step 2: Mixture-of-Experts sub-layer */}
                       <div style={{ border: selectedLayer.hasMoe ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(255,255,255,0.03)', borderRadius: '6px', padding: '14px', background: selectedLayer.hasMoe ? 'rgba(16, 185, 129, 0.02)' : 'rgba(255,255,255,0.01)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
                           <span>2. Mixture-of-Experts sub-layer</span>
-                          <span style={{ color: selectedLayer.hasMoe ? '#10B981' : '#64748B' }}>
-                            {selectedLayer.hasMoe ? 'Active (top 16 of 896 routed experts)' : 'Not present (dense layer)'}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ color: selectedLayer.hasMoe ? '#10B981' : '#64748B' }}>
+                              {selectedLayer.hasMoe ? 'Active (top 16 of 896 routed experts)' : 'Not present (dense layer)'}
+                            </span>
+                            {selectedLayer.hasMoe && (
+                              <button
+                                onClick={() => onNavigateTab?.('op_moe')}
+                                style={{
+                                  background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
+                                  border: 'none',
+                                  color: '#000',
+                                  padding: '5px 12px',
+                                  borderRadius: '6px',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.88rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                🚀 跳转：§8.5 LatentMoE 原理剖析
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '1.08rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
