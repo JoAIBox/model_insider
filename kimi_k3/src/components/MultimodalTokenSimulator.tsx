@@ -20,8 +20,8 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
   // Dynamic Flow & Animation Control States
   const [stepIdx, setStepIdx] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(true); // Default active live animation
-  const [speedMs, setSpeedMs] = useState<number>(1600);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false); // Manual step debugger by default
+  const speedMs = 1600; // Fixed animation speed
   const [viewMode, setViewMode] = useState<'math' | 'analogy'>('analogy');
   const [imgRes, setImgRes] = useState<number>(56);
 
@@ -326,19 +326,6 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 >
                   下一步 ⏩
                 </button>
-
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '10px' }}>
-                  <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>动画播放速度:</span>
-                  <input
-                    type="range"
-                    min="600"
-                    max="3000"
-                    step="200"
-                    value={speedMs}
-                    onChange={(e) => setSpeedMs(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                </div>
               </div>
 
               {/* WIDESCREEN END-TO-END COMPUTATION & AUTOREGRESSIVE LOOPBACK GRAPH SVG */}
