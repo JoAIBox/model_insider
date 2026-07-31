@@ -26,11 +26,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
   const [imgRes, setImgRes] = useState<number>(56); // 56x56 resolution for ablation
 
   // Autoregressive Token Generation Timeline State (t = N+1, N+2, N+3)
-  const [genStep, setGenStep] = useState<number>(0); // 0: Prefill, 1: y1 ("A"), 2: y2 ("black"), 3: y3 ("cat")
-  const generatedTokens = [
-    { text: "A", color: "#F59E0B" },
-    { text: "black", color: "#10B981" },
-    { text: "cat", color: "#EC4899" }
+  const [genStep, setGenStep] = useState<number>(0); // 0: Prefill Context, 1: Step t=N+1, 2: Step t=N+2, 3: Step t=N+3
+  const stepTokens = [
+    { token: "Token_y1", label: "预测Token #1 (自回归 t=N+1)", color: "#F59E0B" },
+    { token: "Token_y2", label: "预测Token #2 (自回归 t=N+2)", color: "#10B981" },
+    { token: "Token_y3", label: "预测Token #3 (自回归 t=N+3)", color: "#EC4899" }
   ];
 
   // Interactive Patch selection for Step 2 & 3
@@ -84,7 +84,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            展现 Context 并行 Prefill (t=1..N) 与 Autoregressive 逐字串行生成 (t=N+1..N+3) 的先后回路关系
+            解密连续图像经 2×2 Pixel Shuffle 压缩为 N/4 个图像 Token（28×28 块产生 1 个 Token），以及自回归解码每次从 160K 词表中采样单 Token 回流追加的全过程
           </p>
         </div>
 
@@ -188,7 +188,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               </div>
 
               <div style={{ background: 'rgba(167, 139, 250, 0.2)', border: '1px solid #A78BFA', padding: '4px 10px', borderRadius: '4px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                🖼️ [28×28 Image]
+                🖼️ [28×28 块 ➔ 生成 1 个图像 Token]
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -205,10 +205,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
             {/* Autoregressive Generation Time Controls */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#0B0F19', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
               <span style={{ fontSize: '0.85rem', color: '#F59E0B', fontWeight: 'bold' }}>
-                ⏱️ 生成先后时间轴: t = {genStep === 0 ? '1..N (Prefill Context)' : `N+${genStep}`}
+                ⏱️ 预测生成步: {genStep === 0 ? 'Context 并行预热 (Prefill)' : `单 Token 采样 (t=N+${genStep})`}
               </span>
               <button
-                onClick={() => setGenStep((prev) => (prev < generatedTokens.length ? prev + 1 : 0))}
+                onClick={() => setGenStep((prev) => (prev < stepTokens.length ? prev + 1 : 0))}
                 style={{
                   padding: '5px 12px',
                   borderRadius: '4px',
@@ -220,7 +220,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                {genStep < generatedTokens.length ? `↻ 预测生成 Token y_${genStep + 1}` : '🔄 重置为 Context 输入'}
+                {genStep < stepTokens.length ? `↻ 预测 160K 词表下一个 Token (t=N+${genStep + 1})` : '🔄 重置为 Context Prefill'}
               </button>
             </div>
 
@@ -268,7 +268,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.1rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                  🎬 区域一：多模态 Token 全流程计算与自回归生成先后拓扑图
+                  🎬 区域一：多模态 Token 计算与单步 160K 词表自回归解码拓扑图
                 </h3>
                 <span style={{ fontSize: '0.85rem', background: '#0F172A', color: '#38BDF8', padding: '3px 10px', borderRadius: '4px', fontFamily: 'monospace' }}>
                   Step {stepIdx + 1}/{pipelineSteps.length}: {currentStep.title}
@@ -371,7 +371,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <g opacity={stepIdx === 1 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
                     <rect x="210" y="20" width="150" height="95" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx === 1 ? 3 : 1.5} />
                     <text x="285" y="44" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">2. 切片遍历 (Patch)</text>
-                    <text x="285" y="64" fill="#FFF" fontSize="11" textAnchor="middle">28×28 图像网格</text>
+                    <text x="285" y="64" fill="#FFF" fontSize="11" textAnchor="middle">28×28 图像块</text>
                     <text x="285" y="82" fill="#A78BFA" fontSize="10" fontFamily="monospace" textAnchor="middle">4 个 14×14×3 切片</text>
                     <text x="285" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">x_p ∈ ℝ^(4 × 588px)</text>
                   </g>
@@ -389,12 +389,12 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
                   <line x1="555" y1="67" x2="573" y2="67" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
 
-                  {/* 4. VISION BRANCH C: 2x2 Pixel Shuffle Synthesis (2048d) */}
+                  {/* 4. VISION BRANCH C: 2x2 Pixel Shuffle Synthesis (2048d -> 1 Visual Token) */}
                   <g opacity={stepIdx === 3 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
                     <rect x="580" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#F59E0B" strokeWidth={stepIdx === 3 ? 3 : 1.5} />
                     <text x="660" y="44" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">4. 2×2 Pixel Shuffle</text>
                     <text x="660" y="64" fill="#FFF" fontSize="11" textAnchor="middle">4×512d 空间打平</text>
-                    <text x="660" y="82" fill="#F59E0B" fontSize="10" fontFamily="monospace" textAnchor="middle">合成为 1 个图像Token</text>
+                    <text x="660" y="82" fill="#F59E0B" fontSize="10" fontFamily="monospace" textAnchor="middle">压缩为 1个图像Token!</text>
                     <text x="660" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">v_2048 ∈ ℝ^2,048</text>
                   </g>
 
@@ -425,34 +425,34 @@ export const MultimodalTokenSimulator: React.FC = () => {
                       6. 前向交错序列 Stream X ➔ 送入 93 层 Backbone 处理 (KDA + AttnRes + LatentMoE)
                     </text>
 
-                    {/* Sequential Order Visual Blocks (with Autoregressive append tokens y1, y2, y3) */}
+                    {/* Sequential Order Visual Blocks (Prefill Tokens + 1-by-1 Autoregressive Appended Token) */}
                     <g transform="translate(155, 256)">
                       <rect x="0" y="0" width="110" height="24" rx="4" fill="#38BDF8" />
                       <text x="55" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_prefix (Text)</text>
 
                       <rect x="118" y="0" width="150" height="24" rx="4" fill="#10B981" />
-                      <text x="193" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_vision (Image Token)</text>
+                      <text x="193" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1个x_vision (28×28 Image)</text>
 
                       <rect x="276" y="0" width="110" height="24" rx="4" fill="#38BDF8" />
                       <text x="331" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_suffix (Text)</text>
 
-                      {/* Autoregressive Appended Tokens (y1, y2, y3) appearing dynamically */}
+                      {/* Autoregressive Appended Single Token y_t appearing step by step */}
                       {genStep >= 1 && (
                         <g transform="translate(394, 0)">
-                          <rect x="0" y="0" width="45" height="24" rx="4" fill="#F59E0B" />
-                          <text x="22" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">y1:"A"</text>
+                          <rect x="0" y="0" width="50" height="24" rx="4" fill="#F59E0B" />
+                          <text x="25" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y1</text>
                         </g>
                       )}
                       {genStep >= 2 && (
-                        <g transform="translate(443, 0)">
-                          <rect x="0" y="0" width="55" height="24" rx="4" fill="#10B981" />
-                          <text x="27" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">y2:"black"</text>
+                        <g transform="translate(448, 0)">
+                          <rect x="0" y="0" width="50" height="24" rx="4" fill="#10B981" />
+                          <text x="25" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y2</text>
                         </g>
                       )}
                       {genStep >= 3 && (
                         <g transform="translate(502, 0)">
-                          <rect x="0" y="0" width="45" height="24" rx="4" fill="#EC4899" />
-                          <text x="22" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">y3:"cat"</text>
+                          <rect x="0" y="0" width="50" height="24" rx="4" fill="#EC4899" />
+                          <text x="25" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y3</text>
                         </g>
                       )}
                     </g>
@@ -465,15 +465,15 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <g opacity={stepIdx === 6 || genStep > 0 ? 1 : 0.6} style={{ transition: 'all 0.3s' }}>
                     <rect x="60" y="345" width="740" height="95" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
                     <text x="430" y="368" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
-                      7. 逆向解码与自回归串行生成 (Output Decoding & Autoregressive Loopback)
+                      7. 单步 160K 词表采样解码与自回归追加 (160K Vocabulary Sampling & Loopback)
                     </text>
 
-                    {/* Left Decoder Branch: Text Decoding */}
+                    {/* Left Decoder Branch: 160K Vocabulary Text Decoding */}
                     <g transform="translate(80, 378)">
                       <rect x="0" y="0" width="310" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
-                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 文本解码: W_unembed [151,643×7168]</text>
+                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 W_unembed [160,000×7,168] 词表打分</text>
                       <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">
-                        {genStep === 0 ? 'h_t ➔ Logits ➔ Softmax ➔ Token ID ➔ "Cat"' : `预测 Token y_${genStep}: "${generatedTokens[genStep - 1]?.text}" (t=N+${genStep})`}
+                        {genStep === 0 ? 'h_t ➔ 160K Logits ➔ Softmax ➔ 采样 1 个 Next Token' : `采样输出 1 个 Token (t=N+${genStep}): ${stepTokens[genStep - 1]?.token}`}
                       </text>
                     </g>
 
@@ -481,12 +481,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
                     <g transform="translate(420, 378)">
                       <rect x="0" y="0" width="360" height="50" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
                       <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ 图像还原: Un-shuffle ➔ ConvTranspose2d</text>
-                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">v_2048 ➔ 4×512d ➔ 4×588px ➔ 28×28 像素重构</text>
+                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">1个v_2048 ➔ 4×512d ➔ 4×588px ➔ 28×28 像素重构</text>
                     </g>
                   </g>
 
                   {/* === AUTOREGRESSIVE GOLDEN LOOPBACK ARROW (Loopback Arc) === */}
-                  {/* Arc curved from text decoder output back to input sequence */}
                   <path
                     d="M 235 428 C 30 428, 30 265, 130 265"
                     fill="none"
@@ -497,16 +496,16 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   />
                   <rect x="25" y="335" width="135" height="26" rx="4" fill="#F59E0B" />
                   <text x="92" y="352" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">
-                    ↺ 自回归回路 (Loopback Append)
+                    ↺ 单 Token 回流追加 (Write Back)
                   </text>
                 </svg>
 
                 <div style={{ background: '#0F172A', padding: '10px 14px', borderRadius: '6px', fontSize: '0.88rem', color: '#94A3B8', marginTop: '6px' }}>
-                  💡 <b>生成 Token 先后顺序与自回归回路说明:</b>
+                  💡 <b>严格符合 Kimi K3 架构规范的 Token 数量与采样逻辑:</b>
                   <br />
-                  1. <b>Prefill 并行预热期 ($t = 1 \dots N$)</b>：Prompt 输入（Prefix文本 + 图像Token + Suffix文本）一次性并行喂入 93 层 Backbone。
+                  1. <b>图像分支 Token 压缩率</b>：2×2 Pixel Shuffle 将 4 个 14×14 ViT 512d 特征块压缩为 <b>仅 1 个 2,048d 图像 Token</b>（升维后为 1 个 7,168d Token），使图像视觉 Token 数量锐减 75%！
                   <br />
-                  2. <b>Autoregressive 串行生成期 ($t = N+1 \dots N+3$)</b>：第 $t$ 步通过 W_unembed 预测出下一个 Token $y_t$（如 `"{generatedTokens[genStep - 1]?.text || 'A'}"`）；随后沿着<b>黄色弯曲回路 (Loopback Arc)</b> 重新追加到 Sequence 末尾，作为第 $t+1$ 步的新 Context 继续推演，完美展现自回归生成的先后依赖关系！
+                  2. <b>自回归解码单 Token 采样</b>：每次时间步 $t$，模型过 W_unembed 对 <b>160,000 (160K) 维词表</b>打分，<b>单次仅采样产生 1 个 Next Token</b>；该 Token 沿黄色回路写回 (Write Back) 上下文末尾，驱动下一步推演！
                 </div>
               </div>
 
