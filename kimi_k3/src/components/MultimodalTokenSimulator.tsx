@@ -25,6 +25,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
   const [viewMode, setViewMode] = useState<'math' | 'analogy'>('analogy');
   const [imgRes, setImgRes] = useState<number>(56); // 56x56 resolution for ablation
 
+  // Autoregressive Token Generation Timeline State (t = N+1, N+2, N+3)
+  const [genStep, setGenStep] = useState<number>(0); // 0: Prefill, 1: y1 ("A"), 2: y2 ("black"), 3: y3 ("cat")
+  const generatedTokens = [
+    { text: "A", color: "#F59E0B" },
+    { text: "black", color: "#10B981" },
+    { text: "cat", color: "#EC4899" }
+  ];
+
   // Interactive Patch selection for Step 2 & 3
   const [selectedPatchGroup, setSelectedPatchGroup] = useState<number>(0);
   
@@ -69,14 +77,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.8rem' }}>🌟</span>
             <h2 style={{ fontSize: '1.6rem', color: '#FFF', margin: 0, fontWeight: 'bold' }}>
-              Layer 0 多模态 Token 全流程计算拓扑与逆向解码控制台
+              Layer 0 多模态 Token 全流程计算拓扑与自回归生成先后控制台
             </h2>
             <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid #38BDF8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-              End-to-End Multimodal Compute Graph (§2.1)
+              Autoregressive Multimodal Compute Graph (§2.1)
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            包含 BPE 分词、512 卷积核遍历、2×2 Pixel Shuffle 拼接、W_proj 升维、交错序列流组装及 Unembedding/反卷积逆向解码全逻辑
+            展现 Context 并行 Prefill (t=1..N) 与 Autoregressive 逐字串行生成 (t=N+1..N+3) 的先后回路关系
           </p>
         </div>
 
@@ -95,7 +103,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            1. 全流程计算拓扑图 (End-to-End Graph)
+            1. 自回归生成拓扑图 (Autoregressive Graph)
           </button>
           <button
             onClick={() => setActiveTab('patchEncoder')}
@@ -160,82 +168,107 @@ export const MultimodalTokenSimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* TAB 1: THREE-PANEL SYNCHRONIZED INTERACTIVE CONSOLE WITH END-TO-END COMPUTE GRAPH */}
+      {/* TAB 1: THREE-PANEL SYNCHRONIZED INTERACTIVE CONSOLE WITH AUTOREGRESSIVE GENERATION TIMELINE */}
       {activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
-          {/* Top Controls: Prompt & Mode Switch */}
+          {/* Top Controls: Prompt & Autoregressive Generation Step Toolbar */}
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '0.85rem', color: '#94A3B8' }}>前缀文本:</label>
+            
+            {/* Input Prompt Controls */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>前缀文本:</label>
                 <input
                   type="text"
                   value={prefixText}
                   onChange={(e) => setPrefixText(e.target.value)}
-                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '4px 10px', borderRadius: '4px', fontSize: '0.95rem', width: '160px' }}
+                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '3px 8px', borderRadius: '4px', fontSize: '0.9rem', width: '130px' }}
                 />
               </div>
 
-              <div style={{ background: 'rgba(167, 139, 250, 0.2)', border: '1px solid #A78BFA', padding: '4px 12px', borderRadius: '4px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                🖼️ [28×28 Image Input]
+              <div style={{ background: 'rgba(167, 139, 250, 0.2)', border: '1px solid #A78BFA', padding: '4px 10px', borderRadius: '4px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                🖼️ [28×28 Image]
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '0.85rem', color: '#94A3B8' }}>后缀文本:</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>后缀文本:</label>
                 <input
                   type="text"
                   value={suffixText}
                   onChange={(e) => setSuffixText(e.target.value)}
-                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '4px 10px', borderRadius: '4px', fontSize: '0.95rem', width: '160px' }}
+                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '3px 8px', borderRadius: '4px', fontSize: '0.9rem', width: '130px' }}
                 />
               </div>
             </div>
 
+            {/* Autoregressive Generation Time Controls */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#0B0F19', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+              <span style={{ fontSize: '0.85rem', color: '#F59E0B', fontWeight: 'bold' }}>
+                ⏱️ 生成先后时间轴: t = {genStep === 0 ? '1..N (Prefill Context)' : `N+${genStep}`}
+              </span>
+              <button
+                onClick={() => setGenStep((prev) => (prev < generatedTokens.length ? prev + 1 : 0))}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: '#F59E0B',
+                  color: '#000',
+                  fontWeight: 'bold',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {genStep < generatedTokens.length ? `↻ 预测生成 Token y_${genStep + 1}` : '🔄 重置为 Context 输入'}
+              </button>
+            </div>
+
             {/* Mode Switcher */}
-            <div style={{ display: 'flex', gap: '8px', background: '#0B0F19', padding: '4px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', gap: '6px', background: '#0B0F19', padding: '4px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
               <button
                 onClick={() => setViewMode('analogy')}
                 style={{
-                  padding: '6px 14px',
+                  padding: '5px 10px',
                   borderRadius: '4px',
                   border: 'none',
                   background: viewMode === 'analogy' ? '#38BDF8' : 'transparent',
                   color: viewMode === 'analogy' ? '#000' : '#94A3B8',
                   fontWeight: 'bold',
-                  fontSize: '0.9rem',
+                  fontSize: '0.85rem',
                   cursor: 'pointer'
                 }}
               >
-                💡 软件工程类比模式
+                💡 类比模式
               </button>
               <button
                 onClick={() => setViewMode('math')}
                 style={{
-                  padding: '6px 14px',
+                  padding: '5px 10px',
                   borderRadius: '4px',
                   border: 'none',
                   background: viewMode === 'math' ? '#A78BFA' : 'transparent',
                   color: viewMode === 'math' ? '#000' : '#94A3B8',
                   fontWeight: 'bold',
-                  fontSize: '0.9rem',
+                  fontSize: '0.85rem',
                   cursor: 'pointer'
                 }}
               >
-                📐 学术公式与代码模式
+                📐 学术模式
               </button>
             </div>
+
           </div>
 
           {/* 3-Panel Main Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
             
-            {/* PANEL 1: END-TO-END COMPUTATION GRAPH & STEP DEBUGGER */}
+            {/* PANEL 1: END-TO-END COMPUTATION GRAPH & AUTOREGRESSIVE TIMELINE DEBUGGER */}
             <div style={{ background: '#070913', padding: '20px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.1rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                  🎬 区域一：多模态 Token 全流程计算与解码拓扑图 (Compute Graph)
+                  🎬 区域一：多模态 Token 全流程计算与自回归生成先后拓扑图
                 </h3>
                 <span style={{ fontSize: '0.85rem', background: '#0F172A', color: '#38BDF8', padding: '3px 10px', borderRadius: '4px', fontFamily: 'monospace' }}>
                   Step {stepIdx + 1}/{pipelineSteps.length}: {currentStep.title}
@@ -302,9 +335,9 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 </div>
               </div>
 
-              {/* WIDESCREEN END-TO-END COMPUTATION & DECODING GRAPH SVG */}
+              {/* WIDESCREEN END-TO-END COMPUTATION & AUTOREGRESSIVE LOOPBACK GRAPH SVG */}
               <div style={{ background: '#02040a', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <svg viewBox="0 0 940 450" width="100%" height="450">
+                <svg viewBox="0 0 940 480" width="100%" height="480">
                   <defs>
                     <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38BDF8" />
@@ -317,6 +350,9 @@ export const MultimodalTokenSimulator: React.FC = () => {
                     </marker>
                     <marker id="arrow-pink" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#EC4899" />
+                    </marker>
+                    <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#F59E0B" />
                     </marker>
                   </defs>
 
@@ -382,60 +418,95 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <line x1="760" y1="210" x2="760" y2="245" stroke="#10B981" strokeWidth="2.5" />
                   <line x1="760" y1="245" x2="720" y2="245" stroke="#10B981" strokeWidth="2.5" markerEnd="url(#arrow-green)" />
 
-                  {/* 6. Interleaved Physical Sequence Bar & Kimi K3 Backbone */}
+                  {/* 6. Interleaved Physical Sequence Bar & Autoregressive Loopback Stream */}
                   <g opacity={stepIdx === 5 || stepIdx === 0 || stepIdx === 4 ? 1 : 0.75} style={{ transition: 'all 0.3s' }}>
-                    <rect x="140" y="225" width="580" height="75" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
-                    <text x="430" y="248" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
+                    <rect x="140" y="225" width="580" height="85" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
+                    <text x="430" y="246" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
                       6. 前向交错序列 Stream X ➔ 送入 93 层 Backbone 处理 (KDA + AttnRes + LatentMoE)
                     </text>
 
-                    {/* Order Visual Blocks */}
-                    <g transform="translate(170, 258)">
-                      <rect x="0" y="0" width="150" height="24" rx="4" fill="#38BDF8" />
-                      <text x="75" y="16" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">x_prefix (Text 7,168d)</text>
+                    {/* Sequential Order Visual Blocks (with Autoregressive append tokens y1, y2, y3) */}
+                    <g transform="translate(155, 256)">
+                      <rect x="0" y="0" width="110" height="24" rx="4" fill="#38BDF8" />
+                      <text x="55" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_prefix (Text)</text>
 
-                      <rect x="160" y="0" width="200" height="24" rx="4" fill="#10B981" />
-                      <text x="260" y="16" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">x_vision (28×28 Image 7,168d)</text>
+                      <rect x="118" y="0" width="150" height="24" rx="4" fill="#10B981" />
+                      <text x="193" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_vision (Image Token)</text>
 
-                      <rect x="370" y="0" width="150" height="24" rx="4" fill="#38BDF8" />
-                      <text x="445" y="16" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">x_suffix (Text 7,168d)</text>
+                      <rect x="276" y="0" width="110" height="24" rx="4" fill="#38BDF8" />
+                      <text x="331" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_suffix (Text)</text>
+
+                      {/* Autoregressive Appended Tokens (y1, y2, y3) appearing dynamically */}
+                      {genStep >= 1 && (
+                        <g transform="translate(394, 0)">
+                          <rect x="0" y="0" width="45" height="24" rx="4" fill="#F59E0B" />
+                          <text x="22" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">y1:"A"</text>
+                        </g>
+                      )}
+                      {genStep >= 2 && (
+                        <g transform="translate(443, 0)">
+                          <rect x="0" y="0" width="55" height="24" rx="4" fill="#10B981" />
+                          <text x="27" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">y2:"black"</text>
+                        </g>
+                      )}
+                      {genStep >= 3 && (
+                        <g transform="translate(502, 0)">
+                          <rect x="0" y="0" width="45" height="24" rx="4" fill="#EC4899" />
+                          <text x="22" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">y3:"cat"</text>
+                        </g>
+                      )}
                     </g>
                   </g>
 
-                  {/* === SECTION 3: BACKWARD / DECODING RECONSTRUCTION GRAPH (BOTTOM HALF) === */}
-                  <line x1="430" y1="300" x2="430" y2="330" stroke="#EC4899" strokeWidth="2.5" markerEnd="url(#arrow-pink)" />
+                  {/* === SECTION 3: BACKWARD / DECODING RECONSTRUCTION GRAPH & LOOPBACK === */}
+                  <line x1="430" y1="310" x2="430" y2="340" stroke="#EC4899" strokeWidth="2.5" markerEnd="url(#arrow-pink)" />
 
                   {/* 7. DECODING PIPELINE BOX */}
-                  <g opacity={stepIdx === 6 ? 1 : 0.55} style={{ transition: 'all 0.3s' }}>
-                    <rect x="60" y="335" width="740" height="95" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
-                    <text x="430" y="358" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
-                      7. 逆向解码与还原输出网络 (Output Decoding & Image Reconstruction)
+                  <g opacity={stepIdx === 6 || genStep > 0 ? 1 : 0.6} style={{ transition: 'all 0.3s' }}>
+                    <rect x="60" y="345" width="740" height="95" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
+                    <text x="430" y="368" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
+                      7. 逆向解码与自回归串行生成 (Output Decoding & Autoregressive Loopback)
                     </text>
 
                     {/* Left Decoder Branch: Text Decoding */}
-                    <g transform="translate(80, 368)">
+                    <g transform="translate(80, 378)">
                       <rect x="0" y="0" width="310" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
                       <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 文本解码: W_unembed [151,643×7168]</text>
-                      <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">h_t ➔ Logits ➔ Softmax ➔ Token ID ➔ "Cat"</text>
+                      <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">
+                        {genStep === 0 ? 'h_t ➔ Logits ➔ Softmax ➔ Token ID ➔ "Cat"' : `预测 Token y_${genStep}: "${generatedTokens[genStep - 1]?.text}" (t=N+${genStep})`}
+                      </text>
                     </g>
 
                     {/* Right Decoder Branch: Image Reconstruction */}
-                    <g transform="translate(420, 368)">
+                    <g transform="translate(420, 378)">
                       <rect x="0" y="0" width="360" height="50" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
                       <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ 图像还原: Un-shuffle ➔ ConvTranspose2d</text>
                       <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">v_2048 ➔ 4×512d ➔ 4×588px ➔ 28×28 像素重构</text>
                     </g>
                   </g>
+
+                  {/* === AUTOREGRESSIVE GOLDEN LOOPBACK ARROW (Loopback Arc) === */}
+                  {/* Arc curved from text decoder output back to input sequence */}
+                  <path
+                    d="M 235 428 C 30 428, 30 265, 130 265"
+                    fill="none"
+                    stroke="#F59E0B"
+                    strokeWidth="3"
+                    strokeDasharray="6,4"
+                    markerEnd="url(#arrow-gold)"
+                  />
+                  <rect x="25" y="335" width="135" height="26" rx="4" fill="#F59E0B" />
+                  <text x="92" y="352" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">
+                    ↺ 自回归回路 (Loopback Append)
+                  </text>
                 </svg>
 
                 <div style={{ background: '#0F172A', padding: '10px 14px', borderRadius: '6px', fontSize: '0.88rem', color: '#94A3B8', marginTop: '6px' }}>
-                  💡 <b>全流程拓扑图逻辑说明:</b>
+                  💡 <b>生成 Token 先后顺序与自回归回路说明:</b>
                   <br />
-                  1. <b>前向输入</b>：文本经 BPE 查表成 7,168d 向量；图像经 14×14 切片 ➔ 512 卷积核覆盖点乘 (512d) ➔ 2×2 Pixel Shuffle 空间打平 (2,048d) ➔ W_proj 矩阵升维对齐 (7,168d)。
+                  1. <b>Prefill 并行预热期 ($t = 1 \dots N$)</b>：Prompt 输入（Prefix文本 + 图像Token + Suffix文本）一次性并行喂入 93 层 Backbone。
                   <br />
-                  2. <b>序列组装与模型处理</b>：按交错顺序 `[Prefix文本 ➔ 图像Token ➔ Suffix文本]` 组成 Stream X，送入 93 层 Backbone 处理。
-                  <br />
-                  3. <b>逆向解码与还原</b>：文本路经 W_unembed 逆向投影为 151,643 维 Logits 解码成字符；图像路经 Un-shuffle 与转置卷积 `ConvTranspose2d` 还原出 28×28 原始 RGB 像素！
+                  2. <b>Autoregressive 串行生成期 ($t = N+1 \dots N+3$)</b>：第 $t$ 步通过 W_unembed 预测出下一个 Token $y_t$（如 `"{generatedTokens[genStep - 1]?.text || 'A'}"`）；随后沿着<b>黄色弯曲回路 (Loopback Arc)</b> 重新追加到 Sequence 末尾，作为第 $t+1$ 步的新 Context 继续推演，完美展现自回归生成的先后依赖关系！
                 </div>
               </div>
 
@@ -465,10 +536,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
                     </p>
                   </div>
 
-                  <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #EC4899' }}>
-                    <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem' }}>🔄 逆向解码：格式反冲洗与解压缩 (Decoder Unpack)</span>
+                  <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #F59E0B' }}>
+                    <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>↺ 自回归 Loopback：递归 Iterator 与 Queue 追加</span>
                     <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      文本反向查 W_unembed 表算概率；图像通过 Un-shuffle 拆为 4×512d 并过转置卷积 `ConvTranspose2d` 恢复 RGB 像素点阵。
+                      类似于生成器模式 (Generator Iterator)。每次产生的返回值 y_t 被 `queue.append(y_t)` 追加到动态数组末尾，驱动下一轮循环。
                     </p>
                   </div>
 
@@ -476,7 +547,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid #EF4444' }}>
                     <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.9rem' }}>⚠️ 物理边界与严格区别（保障技术精准性）：</span>
                     <p style={{ color: '#CBD5E1', fontSize: '0.85rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      文本是<b>静态离散字典查表</b>；图像是<b>连续神经网络矩阵乘法高维投影 (x_vis = W_proj · v_2048)</b>。两者的底层几何空间在 Layer 0 经线性变换后，统一收敛在 7,168 维高维切片上。
+                      文本是<b>静态离散字典查表</b>；图像是<b>连续神经网络矩阵乘法高维投影 (x_vis = W_proj · v_2048)</b>。自回归生成是<b>逐步概率采样并迭代追加 KV Cache</b>。
                     </p>
                   </div>
 
@@ -485,26 +556,27 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   
                   <div style={{ background: '#0F172A', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '6px' }}>// 前向与逆向 Layer 0 全逻辑 LaTeX 公式：</div>
+                    <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '6px' }}>// 前向与自回归生成全逻辑公式：</div>
                     <div style={{ color: '#38BDF8', fontFamily: 'monospace', fontSize: '0.92rem' }}>
                       e_text = W_emb[token_id]  ∈ ℝ^(7,168)
                     </div>
                     <div style={{ color: '#10B981', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
                       e_img = W_proj · PixelShuffle(Conv2d_512(x_patch))  ∈ ℝ^(7,168)
                     </div>
-                    <div style={{ color: '#EC4899', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
-                      x_recon = ConvTranspose2d(UnShuffle(v_2048))  ∈ ℝ^(28×28×3)
+                    <div style={{ color: '#F59E0B', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
+                      y_(t+1) = Softmax(W_unembed · h_t), Append y_(t+1) to Context
                     </div>
                   </div>
 
                   <div style={{ background: '#0B0F19', padding: '12px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#E2E8F0', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch 前向与逆向完整实现:</div>
+                    <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch 前向与自回归 Loopback 实现:</div>
                     <div style={{ color: stepIdx === 0 ? '#38BDF8' : '#64748B' }}>x_txt = self.w_emb(text_ids)  # [B, T_txt, 7168]</div>
                     <div style={{ color: stepIdx === 2 ? '#10B981' : '#64748B' }}>f_vit = self.conv2d_512(patches)  # [B, N, 512]</div>
                     <div style={{ color: stepIdx === 3 ? '#F59E0B' : '#64748B' }}>v_2048 = pixel_shuffle(f_vit, r=2)  # [B, N/4, 2048]</div>
                     <div style={{ color: stepIdx === 4 ? '#10B981' : '#64748B' }}>x_img = self.w_proj(v_2048)  # [B, N/4, 7168]</div>
-                    <div style={{ color: stepIdx === 6 ? '#EC4899' : '#64748B' }}>logits = self.w_unembed(h_out)  # [B, T, 151643]</div>
-                    <div style={{ color: stepIdx === 6 ? '#EC4899' : '#64748B' }}>img_pix = self.deconv(unshuffle(v_2048))  # [B, 3, 28, 28]</div>
+                    <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}># Autoregressive Loopback:</div>
+                    <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}>y_next = torch.argmax(self.w_unembed(h_t))</div>
+                    <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}>seq_stream.append(self.w_emb(y_next))</div>
                   </div>
 
                 </div>
