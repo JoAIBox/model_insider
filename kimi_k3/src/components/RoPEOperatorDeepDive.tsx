@@ -75,10 +75,125 @@ export const RoPEOperatorDeepDive: React.FC = () => {
 
           <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#F59E0B', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              核心思想：把向量元素两两配对，看作复平面上的点，根据 Token 位置旋转不同角度
+              首先回答核心困惑：RoPE 旋转位置编码与 512 维语义隐向量的关系是什么？64 维从何而来？
             </h3>
-            <p style={{ color: '#94A3B8', fontSize: '1rem', margin: 0, lineHeight: '1.5' }}>
-              RoPE 不是在向量上加一个固定位置向量，而是对每一对维度施加一个<b>与位置 m 成正比的 2D 旋转</b>。不同维度对使用不同频率 θ_i，高频维度捕捉近邻关系，低频维度捕捉长距离依赖。拖动下方滑块观察旋转效果！
+            <p style={{ color: '#94A3B8', fontSize: '1rem', margin: 0, lineHeight: '1.6' }}>
+              <b style={{ color: '#EF4444' }}>RoPE 完全不触碰 512 维语义隐向量！</b>它们是从同一个 7,168 维输入 x_t 出发的<b>两条完全独立的投影路径</b>。
+              512 维纯语义向量保持"干净"（不旋转），而 64 维是通过<b>另一个独立矩阵 W_kr</b> 投影出来的专属位置向量，只有这 64 维会被施加 RoPE 旋转。
+              最终两者<b>拼接 (Concatenation)</b> 成 576 维存入 KV Cache。
+            </p>
+          </div>
+
+          {/* SECTION A: Architecture Origin Diagram — Where does 512d and 64d come from? */}
+          <div style={{ background: '#070913', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            
+            <h4 style={{ color: '#FFF', margin: 0, fontSize: '1.1rem', fontWeight: 'bold', alignSelf: 'flex-start' }}>
+              🏗️ 架构来源图：512 维与 64 维是怎样从 7,168 维输入中产生的？
+            </h4>
+
+            <svg viewBox="0 0 920 340" width="100%" height="340" style={{ overflow: 'visible' }}>
+              <defs>
+                <marker id="arrow-rope-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#A78BFA" />
+                </marker>
+                <marker id="arrow-rope-amber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#F59E0B" />
+                </marker>
+              </defs>
+
+              {/* INPUT: x_t ∈ ℝ^7168 */}
+              <rect x="20" y="120" width="120" height="80" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth="2.5" />
+              <text x="80" y="152" fill="#38BDF8" fontSize="14" fontWeight="bold" textAnchor="middle">输入 x_t</text>
+              <text x="80" y="175" fill="#FFF" fontSize="12" fontFamily="monospace" fontWeight="bold" textAnchor="middle">ℝ^7,168</text>
+
+              {/* TWO INDEPENDENT BRANCHES SPLIT */}
+              <path d="M 140 145 C 200 145, 200 80, 260 80" stroke="#A78BFA" strokeWidth="2.5" fill="none" markerEnd="url(#arrow-rope-purple)" />
+              <path d="M 140 175 C 200 175, 200 250, 260 250" stroke="#F59E0B" strokeWidth="2.5" fill="none" markerEnd="url(#arrow-rope-amber)" />
+              
+              <text x="185" y="100" fill="#94A3B8" fontSize="11" fontWeight="bold" textAnchor="middle">独立路径 A</text>
+              <text x="185" y="240" fill="#94A3B8" fontSize="11" fontWeight="bold" textAnchor="middle">独立路径 B</text>
+
+              {/* PATH A: Semantic Latent — W_dkv projection, NO ROPE */}
+              <rect x="260" y="45" width="200" height="70" rx="8" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
+              <text x="360" y="72" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">语义投影矩阵 W_dkv</text>
+              <text x="360" y="92" fill="#94A3B8" fontSize="11" fontFamily="monospace" textAnchor="middle">[512 × 7168] 线性投影</text>
+
+              <line x1="460" y1="80" x2="520" y2="80" stroke="#A78BFA" strokeWidth="2" markerEnd="url(#arrow-rope-purple)" />
+
+              <rect x="520" y="50" width="160" height="60" rx="8" fill="rgba(167, 139, 250, 0.2)" stroke="#A78BFA" strokeWidth="2.5" />
+              <text x="600" y="75" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">c_t^KV ∈ ℝ^512</text>
+              <text x="600" y="95" fill="#94A3B8" fontSize="10" textAnchor="middle">纯语义 · 完全不施加 RoPE 旋转!</text>
+
+              {/* BIG RED X on Path A — NO ROPE HERE */}
+              <circle cx="700" cy="80" r="14" fill="rgba(239, 68, 68, 0.2)" stroke="#EF4444" strokeWidth="2" />
+              <text x="700" y="86" fill="#EF4444" fontSize="16" fontWeight="bold" textAnchor="middle">✗</text>
+              <text x="700" y="55" fill="#EF4444" fontSize="10" fontWeight="bold" textAnchor="middle">禁止 RoPE!</text>
+
+              {/* PATH B: Positional Key — W_kr projection, THEN ROPE ROTATION */}
+              <rect x="260" y="215" width="200" height="70" rx="8" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
+              <text x="360" y="242" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">位置投影矩阵 W_kr</text>
+              <text x="360" y="262" fill="#94A3B8" fontSize="11" fontFamily="monospace" textAnchor="middle">[64 × 7168] 线性投影</text>
+
+              <line x1="460" y1="250" x2="520" y2="250" stroke="#F59E0B" strokeWidth="2" markerEnd="url(#arrow-rope-amber)" />
+
+              <rect x="520" y="220" width="100" height="60" rx="8" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="1.5" />
+              <text x="570" y="245" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">ℝ^64 向量</text>
+              <text x="570" y="262" fill="#94A3B8" fontSize="10" textAnchor="middle">(旋转前)</text>
+
+              <line x1="620" y1="250" x2="660" y2="250" stroke="#F59E0B" strokeWidth="2" />
+
+              {/* ROPE ROTATION APPLIED */}
+              <rect x="660" y="220" width="120" height="60" rx="8" fill="rgba(245, 158, 11, 0.3)" stroke="#F59E0B" strokeWidth="2.5" />
+              <text x="720" y="243" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">🧭 RoPE 旋转</text>
+              <text x="720" y="262" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">R(m · θ_i)</text>
+
+              <line x1="780" y1="250" x2="810" y2="250" stroke="#F59E0B" strokeWidth="2" />
+
+              <rect x="810" y="225" width="100" height="50" rx="6" fill="#F59E0B" />
+              <text x="860" y="248" fill="#000" fontSize="12" fontWeight="bold" textAnchor="middle">k_t^R ∈ ℝ^64</text>
+              <text x="860" y="264" fill="rgba(0,0,0,0.6)" fontSize="9" textAnchor="middle">已含位置信息!</text>
+
+              {/* CONCATENATION BRACKET */}
+              <path d="M 680 110 L 700 110 L 700 215" stroke="#10B981" strokeWidth="2" fill="none" strokeDasharray="5,3" />
+              <path d="M 680 215 L 700 215" stroke="#10B981" strokeWidth="2" fill="none" />
+
+              {/* KV Cache Storage Box */}
+              <rect x="730" y="130" width="180" height="80" rx="8" fill="rgba(16, 185, 129, 0.1)" stroke="#10B981" strokeWidth="2" strokeDasharray="5,3" />
+              <text x="820" y="152" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">💾 KV Cache 存储</text>
+              <text x="820" y="175" fill="#FFF" fontSize="12" fontFamily="monospace" fontWeight="bold" textAnchor="middle">[c_t^KV ‖ k_t^R]</text>
+              <text x="820" y="195" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">512 + 64 = 576 维 (拼接!)</text>
+
+            </svg>
+
+            {/* Dimension Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%' }}>
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #A78BFA' }}>
+                <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>路径 A: 纯语义隐向量</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.1rem', marginTop: '4px' }}>c_t^KV ∈ ℝ^512</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>由 W_dkv [512×7168] 投影，<b style={{ color: '#EF4444' }}>不施加任何 RoPE</b>，保持"干净"以支持矩阵吸收</p>
+              </div>
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #F59E0B' }}>
+                <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>路径 B: RoPE 位置 Key</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.1rem', marginTop: '4px' }}>k_t^R ∈ ℝ^64</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>由<b>独立</b>的 W_kr [64×7168] 投影，然后施加 RoPE 旋转 R(mθ)，64维 = 32对 × 2D旋转</p>
+              </div>
+              <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #10B981' }}>
+                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>KV Cache 最终存储</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.1rem', marginTop: '4px' }}>[c_t^KV ‖ k_t^R] = 576d</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>两条路径的输出<b>拼接</b>（非叠加），互不干扰、互不污染</p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* SECTION B: RoPE Rotation Mechanics — How does the 64d rotation work? */}
+          <div style={{ background: '#070913', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            
+            <h4 style={{ color: '#F59E0B', margin: 0, fontSize: '1.1rem', fontWeight: 'bold' }}>
+              🧭 RoPE 旋转原理：这 64 维是怎样编码位置信息的？
+            </h4>
+            <p style={{ color: '#94A3B8', fontSize: '0.95rem', margin: 0, lineHeight: '1.5' }}>
+              64 维向量被两两配对为 <b>32 对复数</b>，每对维度 (x₁, x₂) 看作复平面上的一个点。根据 Token 的位置 m，每对施加不同频率 θ_i 的 2D 旋转。拖动滑块观察旋转效果！
             </p>
           </div>
 
@@ -135,7 +250,7 @@ export const RoPEOperatorDeepDive: React.FC = () => {
                     {/* Original vector (gray) */}
                     <line x1="0" y1="0" x2={origX} y2={origY} stroke="#64748B" strokeWidth="2" />
                     <circle cx={origX} cy={origY} r="5" fill="#64748B" />
-                    <text x={origX + 8} y={origY - 5} fill="#94A3B8" fontSize="11" fontWeight="bold">原始 (x₁, x₂)</text>
+                    <text x={origX + 8} y={origY - 5} fill="#94A3B8" fontSize="11" fontWeight="bold">旋转前 (x₁, x₂)</text>
 
                     {/* Rotated vector (yellow) */}
                     <line x1="0" y1="0" x2={rx} y2={ry} stroke="#F59E0B" strokeWidth="2.5" />
@@ -155,7 +270,7 @@ export const RoPEOperatorDeepDive: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
               
               <div style={{ background: '#0F172A', padding: '16px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                <h4 style={{ color: '#F59E0B', margin: '0 0 10px 0', fontSize: '1.1rem' }}>2D 旋转矩阵 (每一对维度)</h4>
+                <h4 style={{ color: '#F59E0B', margin: '0 0 10px 0', fontSize: '1.1rem' }}>2D 旋转矩阵 (对 64 维中的每一对施加)</h4>
                 <div style={{ fontFamily: 'monospace', fontSize: '1.05rem', color: '#FFF', lineHeight: '1.8', background: '#070913', padding: '12px', borderRadius: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ color: '#94A3B8' }}>┌</span>
@@ -186,6 +301,9 @@ export const RoPEOperatorDeepDive: React.FC = () => {
                     <span style={{ color: '#94A3B8' }}>┘</span>
                   </div>
                 </div>
+                <p style={{ color: '#94A3B8', fontSize: '0.9rem', margin: '8px 0 0 0' }}>
+                  64 维 = 32 对 × 2D 旋转。每对使用不同频率 θ_i，高频对捕捉邻近 Token 关系，低频对捕捉万级距离依赖。
+                </p>
               </div>
 
               <div style={{ background: '#0F172A', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -213,7 +331,7 @@ export const RoPEOperatorDeepDive: React.FC = () => {
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
                 <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>Kimi K3 频率公式：</span>
                 <span style={{ color: '#FFF', fontFamily: 'monospace', fontSize: '0.95rem', marginLeft: '8px' }}>
-                  θ_i = base^(−2i / d_head), base = 10,000, d_head = 128, i = 0,1,...,63
+                  θ_i = base^(−2i / d_rope), base = 10,000, d_rope = 64, i = 0,1,...,31
                 </span>
               </div>
 
