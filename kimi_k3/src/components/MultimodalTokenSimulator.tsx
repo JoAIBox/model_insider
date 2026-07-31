@@ -25,9 +25,6 @@ export const MultimodalTokenSimulator: React.FC = () => {
   const [viewMode, setViewMode] = useState<'math' | 'analogy'>('analogy');
   const [imgRes, setImgRes] = useState<number>(56);
 
-  // Active patch animation highlight index
-  const [activeScanPatch, setActiveScanPatch] = useState<number>(0);
-
   // Autoregressive Token Generation Queue (Simulating step-by-step token generation)
   const [genStep, setGenStep] = useState<number>(0);
   const vocabSampleTokens = [
@@ -43,17 +40,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Playback loop for Step Debugger and Patch Scanner
+  // Playback loop for Step Debugger
   useEffect(() => {
     if (isPlaying) {
       timerRef.current = setInterval(() => {
-        setStepIdx((prev) => {
-          const nextStep = (prev + 1) % pipelineSteps.length;
-          if (nextStep === 1 || nextStep === 2) {
-            setActiveScanPatch((p) => (p + 1) % 4);
-          }
-          return nextStep;
-        });
+        setStepIdx((prev) => (prev + 1) % pipelineSteps.length);
       }, speedMs);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -358,102 +349,84 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
                   {/* === SECTION 1: FORWARD ENCODING COMPUTE GRAPH (TOP HALF) === */}
 
-                  {/* 1. TEXT BRANCH: String -> Token ID -> W_emb Lookup */}
+                  {/* 1. TEXT PREFIX BRANCH: String -> Token ID -> W_emb Lookup */}
                   <g opacity={stepIdx === 0 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="20" y="20" width="170" height="100" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
-                    <text x="105" y="44" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">1. 文本 BPE 分词与查表</text>
-                    <text x="105" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{prefixText}" ➔ Token ID</text>
-                    <text x="105" y="82" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 检索硬查找</text>
-                    <text x="105" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_text ∈ ℝ^7,168</text>
+                    <rect x="20" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
+                    <text x="100" y="44" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">1. 前缀文本 (Prefix)</text>
+                    <text x="100" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{prefixText}"</text>
+                    <text x="100" y="80" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 查表</text>
+                    <text x="100" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_prefix ∈ ℝ^(T1×7168)</text>
                   </g>
 
-                  {/* 2. VISION BRANCH A: 28x28 Image & 14x14 Patch Sliding Traversal */}
-                  <g opacity={stepIdx === 1 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="210" y="20" width="150" height="100" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx === 1 ? 3 : 1.5} />
-                    <text x="285" y="44" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">2. 切片遍历 (Patch)</text>
-                    <text x="285" y="64" fill="#FFF" fontSize="11" textAnchor="middle">28×28 图像网格</text>
-                    <text x="285" y="82" fill="#A78BFA" fontSize="10" fontFamily="monospace" textAnchor="middle">4 个 14×14×3 切片</text>
-                    <text x="285" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">Patch P_{activeScanPatch+1} 点阵</text>
+                  {/* 2. VISION BRANCH: 28x28 Image Patch -> Conv2d 512 -> 2x2 Pixel Shuffle -> W_proj */}
+                  <g opacity={stepIdx >= 1 && stepIdx <= 4 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="200" y="20" width="370" height="95" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx >= 1 && stepIdx <= 4 ? 3 : 1.5} />
+                    <text x="385" y="42" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">2. 图像分支 (28×28 图像块)</text>
+                    <text x="385" y="62" fill="#FFF" fontSize="10" textAnchor="middle">4×(14×14×3) ➔ 512 卷积核 ➔ 2×2 Pixel Shuffle (2,048d)</text>
+                    <text x="385" y="80" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">W_proj [7168×2048] 升维投影</text>
+                    <text x="385" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">打包生成 仅 1 个图像 Token (x_vis ∈ ℝ^7,168)</text>
                   </g>
 
-                  <line x1="360" y1="70" x2="378" y2="70" stroke="#A78BFA" strokeWidth="2" markerEnd="url(#arrow-purple)" />
-
-                  {/* 3. VISION BRANCH B: 512 Conv2d Filters (MoonViT) */}
-                  <g opacity={stepIdx === 2 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="385" y="20" width="170" height="100" rx="8" fill="#0F172A" stroke="#10B981" strokeWidth={stepIdx === 2 ? 3 : 1.5} />
-                    <text x="470" y="44" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">3. 512 卷积核 (Conv2d)</text>
-                    <text x="470" y="64" fill="#FFF" fontSize="11" textAnchor="middle">512 个 14×14×3 卷积核</text>
-                    <text x="470" y="82" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">覆盖点乘卷积</text>
-                    <text x="470" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">f_vit ∈ ℝ^(4 × 512d)</text>
-                  </g>
-
-                  <line x1="555" y1="70" x2="573" y2="70" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
-
-                  {/* 4. VISION BRANCH C: 2x2 Pixel Shuffle Synthesis (2048d -> 1 Visual Token) */}
-                  <g opacity={stepIdx === 3 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="580" y="20" width="160" height="100" rx="8" fill="#0F172A" stroke="#F59E0B" strokeWidth={stepIdx === 3 ? 3 : 1.5} />
-                    <text x="660" y="44" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">4. 2×2 Pixel Shuffle</text>
-                    <text x="660" y="64" fill="#FFF" fontSize="11" textAnchor="middle">4×512d 空间打包打平</text>
-                    <text x="660" y="82" fill="#F59E0B" fontSize="10" fontFamily="monospace" textAnchor="middle">打包为 1个图像Token!</text>
-                    <text x="660" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">v_2048 ∈ ℝ^2,048</text>
-                  </g>
-
-                  <line x1="740" y1="70" x2="760" y2="70" stroke="#F59E0B" strokeWidth="2" />
-                  <line x1="760" y1="70" x2="760" y2="135" stroke="#F59E0B" strokeWidth="2" markerEnd="url(#arrow-green)" />
-
-                  {/* 5. VISION BRANCH D: W_proj Matrix Projection (7168d) */}
-                  <g opacity={stepIdx === 4 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="650" y="140" width="220" height="75" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth={stepIdx === 4 ? 3 : 1.5} />
-                    <text x="760" y="165" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">5. 线性投影 W_proj 对齐</text>
-                    <text x="760" y="185" fill="#FFF" fontSize="11" fontFamily="monospace" textAnchor="middle">W_proj [7168×2048] 矩阵乘法</text>
-                    <text x="760" y="202" fill="#10B981" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_vis = W_proj · v_2048 ∈ ℝ^7,168</text>
+                  {/* 3. TEXT SUFFIX BRANCH: String -> Token ID -> W_emb Lookup */}
+                  <g opacity={stepIdx === 0 || stepIdx === 5 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="590" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 5 ? 3 : 1.5} />
+                    <text x="670" y="44" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">3. 后缀文本 (Suffix)</text>
+                    <text x="670" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{suffixText}"</text>
+                    <text x="670" y="80" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 查表</text>
+                    <text x="670" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_suffix ∈ ℝ^(T2×7168)</text>
                   </g>
 
                   {/* === SECTION 2: INTERLEAVED SEQUENCE & BACKBONE (MIDDLE) === */}
 
-                  {/* Flow lines down to sequence stream */}
-                  <line x1="105" y1="120" x2="105" y2="255" stroke="#38BDF8" strokeWidth="2.5" />
-                  <line x1="105" y1="255" x2="140" y2="255" stroke="#38BDF8" strokeWidth="2.5" markerEnd="url(#arrow-blue)" />
+                  {/* Flow lines merging down into sequence stream [Prefix Text -> Image -> Suffix Text] */}
+                  <line x1="100" y1="115" x2="100" y2="185" stroke="#38BDF8" strokeWidth="2" />
+                  <line x1="100" y1="185" x2="160" y2="185" stroke="#38BDF8" strokeWidth="2" markerEnd="url(#arrow-blue)" />
 
-                  <line x1="760" y1="215" x2="760" y2="255" stroke="#10B981" strokeWidth="2.5" />
-                  <line x1="760" y1="255" x2="720" y2="255" stroke="#10B981" strokeWidth="2.5" markerEnd="url(#arrow-green)" />
+                  <line x1="385" y1="115" x2="385" y2="185" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
 
-                  {/* 6. Interleaved Physical Sequence Bar & Autoregressive Loopback Stream */}
+                  <line x1="670" y1="115" x2="670" y2="185" stroke="#38BDF8" strokeWidth="2" />
+                  <line x1="670" y1="185" x2="600" y2="185" stroke="#38BDF8" strokeWidth="2" markerEnd="url(#arrow-blue)" />
+
+                  {/* 6. Interleaved Physical Sequence Bar [Prefix文本 ➔ 1个图像Token ➔ Suffix文本] */}
                   <g opacity={stepIdx === 5 || stepIdx === 0 || stepIdx === 4 ? 1 : 0.75} style={{ transition: 'all 0.3s' }}>
-                    <rect x="140" y="235" width="580" height="90" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
-                    <text x="430" y="258" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
-                      6. 前向交错序列 Stream X ➔ 送入 93 层 Backbone 处理 (KDA + AttnRes + LatentMoE)
+                    <rect x="120" y="195" width="620" height="95" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
+                    <text x="430" y="218" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
+                      物理序列拼接 Stream X = [x_prefix, x_vis, x_suffix] ➔ 93层 Backbone 处理
                     </text>
 
-                    {/* Sequential Order Visual Blocks (Prefill Tokens + 1-by-1 Autoregressive Appended Token) */}
-                    <g transform="translate(155, 270)">
-                      <rect x="0" y="0" width="110" height="26" rx="4" fill="#38BDF8" />
-                      <text x="55" y="17" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_prefix (Text)</text>
+                    {/* Sequential Order Visual Blocks (Strictly: Prefix Text -> 1 Image Token -> Suffix Text -> Single Next Token y_t) */}
+                    <g transform="translate(135, 235)">
+                      {/* Block 1: Prefix Text */}
+                      <rect x="0" y="0" width="130" height="32" rx="4" fill="#38BDF8" />
+                      <text x="65" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1. 前缀文本 (Prefix)</text>
+                      <text x="65" y="27" fill="#000" fontSize="8" textAnchor="middle">"{prefixText}"</text>
 
-                      <rect x="118" y="0" width="150" height="26" rx="4" fill="#10B981" />
-                      <text x="193" y="17" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1个x_vis (28×28 Image)</text>
+                      {/* Arrow */}
+                      <text x="138" y="20" fill="#94A3B8" fontSize="12">➔</text>
 
-                      <rect x="276" y="0" width="110" height="26" rx="4" fill="#38BDF8" />
-                      <text x="331" y="17" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_suffix (Text)</text>
+                      {/* Block 2: 1 Image Token */}
+                      <rect x="154" y="0" width="170" height="32" rx="4" fill="#10B981" />
+                      <text x="239" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">2. 图像 Token (1个 28×28)</text>
+                      <text x="239" y="27" fill="#000" fontSize="8" textAnchor="middle">Pixel Shuffle 压缩率 75%</text>
 
-                      {/* Autoregressive Appended Single Token y_t appearing step by step */}
-                      {genStep >= 1 && (
-                        <g transform="translate(394, 0)">
-                          <rect x="0" y="0" width="50" height="26" rx="4" fill="#F59E0B" />
-                          <text x="25" y="17" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y1</text>
-                        </g>
-                      )}
-                      {genStep >= 2 && (
-                        <g transform="translate(448, 0)">
-                          <rect x="0" y="0" width="50" height="26" rx="4" fill="#10B981" />
-                          <text x="25" y="17" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y2</text>
-                        </g>
-                      )}
-                      {genStep >= 3 && (
-                        <g transform="translate(502, 0)">
-                          <rect x="0" y="0" width="50" height="26" rx="4" fill="#EC4899" />
-                          <text x="25" y="17" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y3</text>
-                        </g>
+                      {/* Arrow */}
+                      <text x="330" y="20" fill="#94A3B8" fontSize="12">➔</text>
+
+                      {/* Block 3: Suffix Text */}
+                      <rect x="346" y="0" width="130" height="32" rx="4" fill="#38BDF8" />
+                      <text x="411" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">3. 后缀文本 (Suffix)</text>
+                      <text x="411" y="27" fill="#000" fontSize="8" textAnchor="middle">"{suffixText}"</text>
+
+                      {/* Autoregressive Appended Single Token y_t (1 single next token per step) */}
+                      {genStep > 0 && (
+                        <>
+                          <text x="482" y="20" fill="#F59E0B" fontSize="12">➔</text>
+                          <g transform="translate(496, 0)">
+                            <rect x="0" y="0" width="90" height="32" rx="4" fill="#F59E0B" />
+                            <text x="45" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Next Token y_t</text>
+                            <text x="45" y="27" fill="#000" fontSize="8" fontFamily="monospace" textAnchor="middle">160K 采样单 Token</text>
+                          </g>
+                        </>
                       )}
                     </g>
                   </g>
