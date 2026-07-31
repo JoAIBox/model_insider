@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Pipeline Steps for Multimodal Token Alignment
+// Pipeline Steps for Multimodal Token Alignment & End-to-End Compute Graph
 const pipelineSteps = [
-  { id: 0, title: "1. 文本 BPE 查表", desc: "ID 检索 W_emb 词表矩阵", output: "x_text ∈ ℝ^7,168", type: "text" },
-  { id: 1, title: "2. 图像 14×14 切片", desc: "14×14×3 (588d 像素块)", output: "Patch x_p ∈ ℝ^588", type: "vision" },
-  { id: 2, title: "3. MoonViT-V2 编码", desc: "Conv2d/ViT 提取特征", output: "f_vit ∈ ℝ^512", type: "vision" },
-  { id: 3, title: "4. 2×2 Pixel Shuffle", desc: "4 个 Patch 空间降维拼接", output: "v_2048 ∈ ℝ^2,048", type: "vision" },
-  { id: 4, title: "5. W_proj 矩阵线性投影", desc: "投影对齐到 7,168 维", output: "x_vis ∈ ℝ^7,168", type: "vision" },
+  { id: 0, title: "1. 文本 BPE 分词与查表", desc: "文本字符串 ➔ Token ID ➔ W_emb[ID] 查表生成 7,168 维文本向量", output: "x_text ∈ ℝ^7,168", type: "text" },
+  { id: 1, title: "2. 图像 14×14 切片遍历", desc: "28×28 RGB 图像平铺划分为 4 个 14×14×3 (588d) 像素切片 Patch", output: "Patch x_p ∈ ℝ^(4 × 588px)", type: "vision" },
+  { id: 2, title: "3. 512 卷积核 (MoonViT)", desc: "512 个 14×14×3 卷积核覆盖点积卷积 ➔ 提取 4 个 512 维特征向量", output: "f_vit ∈ ℝ^(4 × 512d)", type: "vision" },
+  { id: 3, title: "4. 2×2 Pixel Shuffle 拼接", desc: "2×2 邻近 4 个 512d 向量空间打平融合 ➔ 合成为 1 个 2,048 维图像 Token", output: "v_2048 ∈ ℝ^2,048", type: "vision" },
+  { id: 4, title: "5. W_proj 矩阵线性投影", desc: "W_proj [7168×2048] 矩阵相乘投影 ➔ 升维对齐至 7,168 维统一高维空间", output: "x_vis ∈ ℝ^7,168", type: "vision" },
+  { id: 5, title: "6. 前向交错序列组装", desc: "[Prefix文本 ➔ 图像Token ➔ Suffix文本] 拼装为数据流 Stream X ➔ 送入 93 层 Backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
+  { id: 6, title: "7. 逆向解码与还原输出", desc: "文本路: W_unembed ➔ Softmax ➔ 预测Token; 图像路: Un-shuffle ➔ ConvTranspose2d ➔ 重构 28×28 像素", output: "Text & Image Output", type: "decoder" }
 ];
 
 export const MultimodalTokenSimulator: React.FC = () => {
@@ -19,7 +21,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
   // Step Debugger States for Overview Tab
   const [stepIdx, setStepIdx] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [speedMs, setSpeedMs] = useState<number>(1800);
+  const [speedMs, setSpeedMs] = useState<number>(2000);
   const [viewMode, setViewMode] = useState<'math' | 'analogy'>('analogy');
   const [imgRes, setImgRes] = useState<number>(56); // 56x56 resolution for ablation
 
@@ -67,14 +69,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.8rem' }}>🌟</span>
             <h2 style={{ fontSize: '1.6rem', color: '#FFF', margin: 0, fontWeight: 'bold' }}>
-              Layer 0 多模态 Token 转换与对齐深度交互控制台
+              Layer 0 多模态 Token 全流程计算拓扑与逆向解码控制台
             </h2>
             <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid #38BDF8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-              Multimodal Tokenizer Simulator (§2.1)
+              End-to-End Multimodal Compute Graph (§2.1)
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            解密离散文本（BPE 查表）与连续图像（MoonViT + Pixel Shuffle + W_proj 矩阵运算）如何统一转换为 7,168 维 Token 向量
+            包含 BPE 分词、512 卷积核遍历、2×2 Pixel Shuffle 拼接、W_proj 升维、交错序列流组装及 Unembedding/反卷积逆向解码全逻辑
           </p>
         </div>
 
@@ -93,7 +95,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            1. 三屏联动交互控制台
+            1. 全流程计算拓扑图 (End-to-End Graph)
           </button>
           <button
             onClick={() => setActiveTab('patchEncoder')}
@@ -108,7 +110,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            2. 588d → 512d 图像编码
+            2. 512 卷积核点积计算
           </button>
           <button
             onClick={() => setActiveTab('pixelShuffle')}
@@ -158,7 +160,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* TAB 1: THREE-PANEL SYNCHRONIZED INTERACTIVE CONSOLE */}
+      {/* TAB 1: THREE-PANEL SYNCHRONIZED INTERACTIVE CONSOLE WITH END-TO-END COMPUTE GRAPH */}
       {activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
@@ -176,7 +178,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               </div>
 
               <div style={{ background: 'rgba(167, 139, 250, 0.2)', border: '1px solid #A78BFA', padding: '4px 12px', borderRadius: '4px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                🖼️ [28×28 Image Region]
+                🖼️ [28×28 Image Input]
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -226,14 +228,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
           </div>
 
           {/* 3-Panel Main Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
             
-            {/* PANEL 1: PIPELINE ANIMATION & STEP DEBUGGER */}
+            {/* PANEL 1: END-TO-END COMPUTATION GRAPH & STEP DEBUGGER */}
             <div style={{ background: '#070913', padding: '20px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.1rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                  🎬 区域一：多模态转换与对齐数据流 (Pipeline Flow)
+                  🎬 区域一：多模态 Token 全流程计算与解码拓扑图 (Compute Graph)
                 </h3>
                 <span style={{ fontSize: '0.85rem', background: '#0F172A', color: '#38BDF8', padding: '3px 10px', borderRadius: '4px', fontFamily: 'monospace' }}>
                   Step {stepIdx + 1}/{pipelineSteps.length}: {currentStep.title}
@@ -249,7 +251,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                     style={{
                       padding: '6px 10px',
                       borderRadius: '6px',
-                      background: idx === stepIdx ? (s.type === 'text' ? '#38BDF8' : '#A78BFA') : '#0F172A',
+                      background: idx === stepIdx ? (s.type === 'text' ? '#38BDF8' : s.type === 'decoder' ? '#EC4899' : '#A78BFA') : '#0F172A',
                       color: idx === stepIdx ? '#000' : '#94A3B8',
                       fontWeight: 'bold',
                       fontSize: '0.82rem',
@@ -300,9 +302,9 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 </div>
               </div>
 
-              {/* SVG Animation Display - Full Multimodal Alignment & Concatenation Flow */}
+              {/* WIDESCREEN END-TO-END COMPUTATION & DECODING GRAPH SVG */}
               <div style={{ background: '#02040a', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <svg viewBox="0 0 820 320" width="100%" height="320">
+                <svg viewBox="0 0 940 450" width="100%" height="450">
                   <defs>
                     <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38BDF8" />
@@ -313,88 +315,127 @@ export const MultimodalTokenSimulator: React.FC = () => {
                     <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10B981" />
                     </marker>
+                    <marker id="arrow-pink" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#EC4899" />
+                    </marker>
                   </defs>
 
-                  {/* BRANCH A: Text Branch (BPE Lookup) */}
-                  <g opacity={stepIdx === 0 ? 1 : 0.45} style={{ transition: 'all 0.3s' }}>
-                    <rect x="20" y="20" width="210" height="85" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
-                    <text x="125" y="46" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">1. 离散文本 BPE 查表</text>
-                    <text x="125" y="66" fill="#FFF" fontSize="12" textAnchor="middle">"{prefixText}" & "{suffixText}"</text>
-                    <text x="125" y="86" fill="#38BDF8" fontSize="11" fontFamily="monospace" textAnchor="middle">W_emb[ID] → x_text ∈ ℝ^7,168</text>
+                  {/* === SECTION 1: FORWARD ENCODING COMPUTE GRAPH (TOP HALF) === */}
+
+                  {/* 1. TEXT BRANCH: String -> Token ID -> W_emb Lookup */}
+                  <g opacity={stepIdx === 0 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="20" y="20" width="170" height="95" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
+                    <text x="105" y="44" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">1. 文本 BPE 分词与查表</text>
+                    <text x="105" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{prefixText}" ➔ IDs [4821,1024]</text>
+                    <text x="105" y="82" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 检索</text>
+                    <text x="105" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_text ∈ ℝ^7,168</text>
                   </g>
 
-                  {/* BRANCH B1: Image Patch (14x14x3 = 588d) */}
-                  <g opacity={stepIdx === 1 ? 1 : 0.45} style={{ transition: 'all 0.3s' }}>
-                    <rect x="260" y="20" width="160" height="85" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx === 1 ? 3 : 1.5} />
-                    <text x="340" y="46" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">2. 图像 14×14 切片</text>
-                    <text x="340" y="66" fill="#FFF" fontSize="12" textAnchor="middle">4 个 Patch (28×28)</text>
-                    <text x="340" y="86" fill="#A78BFA" fontSize="11" fontFamily="monospace" textAnchor="middle">x_p ∈ ℝ^(4 × 588px)</text>
+                  {/* 2. VISION BRANCH A: 28x28 Image & 14x14 Patch Sliding Traversal */}
+                  <g opacity={stepIdx === 1 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="210" y="20" width="150" height="95" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx === 1 ? 3 : 1.5} />
+                    <text x="285" y="44" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">2. 切片遍历 (Patch)</text>
+                    <text x="285" y="64" fill="#FFF" fontSize="11" textAnchor="middle">28×28 图像网格</text>
+                    <text x="285" y="82" fill="#A78BFA" fontSize="10" fontFamily="monospace" textAnchor="middle">4 个 14×14×3 切片</text>
+                    <text x="285" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">x_p ∈ ℝ^(4 × 588px)</text>
                   </g>
 
-                  {/* Arrow B1 -> B2 */}
-                  <line x1="420" y1="62" x2="445" y2="62" stroke="#A78BFA" strokeWidth="2" markerEnd="url(#arrow-purple)" />
+                  <line x1="360" y1="67" x2="378" y2="67" stroke="#A78BFA" strokeWidth="2" markerEnd="url(#arrow-purple)" />
 
-                  {/* BRANCH B2: MoonViT-V2 (512d) */}
-                  <g opacity={stepIdx === 2 ? 1 : 0.45} style={{ transition: 'all 0.3s' }}>
-                    <rect x="450" y="20" width="160" height="85" rx="8" fill="#0F172A" stroke="#10B981" strokeWidth={stepIdx === 2 ? 3 : 1.5} />
-                    <text x="530" y="46" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">3. MoonViT-V2 编码</text>
-                    <text x="530" y="66" fill="#FFF" fontSize="12" textAnchor="middle">Conv2d/ViT 抽取特征</text>
-                    <text x="530" y="86" fill="#10B981" fontSize="11" fontFamily="monospace" textAnchor="middle">f_vit ∈ ℝ^(4 × 512d)</text>
+                  {/* 3. VISION BRANCH B: 512 Conv2d Filters (MoonViT) */}
+                  <g opacity={stepIdx === 2 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="385" y="20" width="170" height="95" rx="8" fill="#0F172A" stroke="#10B981" strokeWidth={stepIdx === 2 ? 3 : 1.5} />
+                    <text x="470" y="44" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">3. 512 卷积核 (Conv2d)</text>
+                    <text x="470" y="64" fill="#FFF" fontSize="11" textAnchor="middle">512 个 14×14×3 卷积核</text>
+                    <text x="470" y="82" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">覆盖点乘抽取</text>
+                    <text x="470" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">f_vit ∈ ℝ^(4 × 512d)</text>
                   </g>
 
-                  {/* Arrow B2 -> B3 */}
-                  <line x1="610" y1="62" x2="635" y2="62" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
+                  <line x1="555" y1="67" x2="573" y2="67" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
 
-                  {/* BRANCH B3: 2x2 Pixel Shuffle (2048d) */}
-                  <g opacity={stepIdx === 3 ? 1 : 0.45} style={{ transition: 'all 0.3s' }}>
-                    <rect x="640" y="20" width="160" height="85" rx="8" fill="#0F172A" stroke="#F59E0B" strokeWidth={stepIdx === 3 ? 3 : 1.5} />
-                    <text x="720" y="46" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">4. 2×2 Pixel Shuffle</text>
-                    <text x="720" y="66" fill="#FFF" fontSize="12" textAnchor="middle">4 个 Patch 拼接为 1 Token</text>
-                    <text x="720" y="86" fill="#F59E0B" fontSize="11" fontFamily="monospace" textAnchor="middle">v_2048 ∈ ℝ^2,048</text>
+                  {/* 4. VISION BRANCH C: 2x2 Pixel Shuffle Synthesis (2048d) */}
+                  <g opacity={stepIdx === 3 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="580" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#F59E0B" strokeWidth={stepIdx === 3 ? 3 : 1.5} />
+                    <text x="660" y="44" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">4. 2×2 Pixel Shuffle</text>
+                    <text x="660" y="64" fill="#FFF" fontSize="11" textAnchor="middle">4×512d 空间打平</text>
+                    <text x="660" y="82" fill="#F59E0B" fontSize="10" fontFamily="monospace" textAnchor="middle">合成为 1 个图像Token</text>
+                    <text x="660" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">v_2048 ∈ ℝ^2,048</text>
                   </g>
 
-                  {/* Arrow B3 Down to B4 (W_proj Matrix) */}
-                  <line x1="720" y1="105" x2="720" y2="145" stroke="#F59E0B" strokeWidth="2" markerEnd="url(#arrow-green)" />
+                  <line x1="740" y1="67" x2="760" y2="67" stroke="#F59E0B" strokeWidth="2" />
+                  <line x1="760" y1="67" x2="760" y2="135" stroke="#F59E0B" strokeWidth="2" markerEnd="url(#arrow-green)" />
 
-                  {/* BRANCH B4: W_proj Projection Matrix (7168d) */}
-                  <g opacity={stepIdx === 4 ? 1 : 0.45} style={{ transition: 'all 0.3s' }}>
-                    <rect x="580" y="150" width="220" height="75" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth={stepIdx === 4 ? 3 : 1.5} />
-                    <text x="690" y="178" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">5. 线性投影 W_proj 对齐</text>
-                    <text x="690" y="200" fill="#FFF" fontSize="11" fontFamily="monospace" textAnchor="middle">x_vis = W_proj · v_2048 ∈ ℝ^7,168</text>
+                  {/* 5. VISION BRANCH D: W_proj Matrix Projection (7168d) */}
+                  <g opacity={stepIdx === 4 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
+                    <rect x="650" y="140" width="220" height="70" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth={stepIdx === 4 ? 3 : 1.5} />
+                    <text x="760" y="165" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">5. 线性投影 W_proj 对齐</text>
+                    <text x="760" y="185" fill="#FFF" fontSize="11" fontFamily="monospace" textAnchor="middle">W_proj [7168×2048] 矩阵乘法</text>
+                    <text x="760" y="200" fill="#10B981" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_vis = W_proj · v_2048 ∈ ℝ^7,168</text>
                   </g>
 
-                  {/* Flow Lines Down to Final Concatenation Stream */}
-                  {/* Text Flow Line */}
-                  <line x1="125" y1="105" x2="125" y2="255" stroke="#38BDF8" strokeWidth="2.5" />
-                  <line x1="125" y1="255" x2="160" y2="255" stroke="#38BDF8" strokeWidth="2.5" markerEnd="url(#arrow-blue)" />
+                  {/* === SECTION 2: INTERLEAVED SEQUENCE & BACKBONE (MIDDLE) === */}
 
-                  {/* Vision Flow Line */}
-                  <line x1="690" y1="225" x2="690" y2="255" stroke="#10B981" strokeWidth="2.5" />
-                  <line x1="690" y1="255" x2="660" y2="255" stroke="#10B981" strokeWidth="2.5" markerEnd="url(#arrow-green)" />
+                  {/* Flow lines down to sequence stream */}
+                  <line x1="105" y1="115" x2="105" y2="245" stroke="#38BDF8" strokeWidth="2.5" />
+                  <line x1="105" y1="245" x2="140" y2="245" stroke="#38BDF8" strokeWidth="2.5" markerEnd="url(#arrow-blue)" />
 
-                  {/* STEP 5: FINAL CONCATENATED INTERLEAVED SEQUENCE */}
-                  <g opacity={stepIdx === 4 || stepIdx === 0 ? 1 : 0.8}>
-                    <rect x="160" y="235" width="500" height="65" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth="2.5" />
-                    <text x="410" y="258" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
-                      6. 最终物理交错拼接序列 (Interleaved Sequence Stream X)
+                  <line x1="760" y1="210" x2="760" y2="245" stroke="#10B981" strokeWidth="2.5" />
+                  <line x1="760" y1="245" x2="720" y2="245" stroke="#10B981" strokeWidth="2.5" markerEnd="url(#arrow-green)" />
+
+                  {/* 6. Interleaved Physical Sequence Bar & Kimi K3 Backbone */}
+                  <g opacity={stepIdx === 5 || stepIdx === 0 || stepIdx === 4 ? 1 : 0.75} style={{ transition: 'all 0.3s' }}>
+                    <rect x="140" y="225" width="580" height="75" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
+                    <text x="430" y="248" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
+                      6. 前向交错序列 Stream X ➔ 送入 93 层 Backbone 处理 (KDA + AttnRes + LatentMoE)
                     </text>
-                    
-                    {/* Visual Segment Blocks showing Order */}
-                    <g transform="translate(180, 268)">
-                      <rect x="0" y="0" width="130" height="22" rx="4" fill="#38BDF8" />
-                      <text x="65" y="15" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_prefix (Text)</text>
 
-                      <rect x="140" y="0" width="180" height="22" rx="4" fill="#10B981" />
-                      <text x="230" y="15" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_vision (28×28 Image Token)</text>
+                    {/* Order Visual Blocks */}
+                    <g transform="translate(170, 258)">
+                      <rect x="0" y="0" width="150" height="24" rx="4" fill="#38BDF8" />
+                      <text x="75" y="16" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">x_prefix (Text 7,168d)</text>
 
-                      <rect x="330" y="0" width="130" height="22" rx="4" fill="#38BDF8" />
-                      <text x="395" y="15" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_suffix (Text)</text>
+                      <rect x="160" y="0" width="200" height="24" rx="4" fill="#10B981" />
+                      <text x="260" y="16" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">x_vision (28×28 Image 7,168d)</text>
+
+                      <rect x="370" y="0" width="150" height="24" rx="4" fill="#38BDF8" />
+                      <text x="445" y="16" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">x_suffix (Text 7,168d)</text>
+                    </g>
+                  </g>
+
+                  {/* === SECTION 3: BACKWARD / DECODING RECONSTRUCTION GRAPH (BOTTOM HALF) === */}
+                  <line x1="430" y1="300" x2="430" y2="330" stroke="#EC4899" strokeWidth="2.5" markerEnd="url(#arrow-pink)" />
+
+                  {/* 7. DECODING PIPELINE BOX */}
+                  <g opacity={stepIdx === 6 ? 1 : 0.55} style={{ transition: 'all 0.3s' }}>
+                    <rect x="60" y="335" width="740" height="95" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
+                    <text x="430" y="358" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
+                      7. 逆向解码与还原输出网络 (Output Decoding & Image Reconstruction)
+                    </text>
+
+                    {/* Left Decoder Branch: Text Decoding */}
+                    <g transform="translate(80, 368)">
+                      <rect x="0" y="0" width="310" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
+                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 文本解码: W_unembed [151,643×7168]</text>
+                      <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">h_t ➔ Logits ➔ Softmax ➔ Token ID ➔ "Cat"</text>
+                    </g>
+
+                    {/* Right Decoder Branch: Image Reconstruction */}
+                    <g transform="translate(420, 368)">
+                      <rect x="0" y="0" width="360" height="50" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
+                      <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ 图像还原: Un-shuffle ➔ ConvTranspose2d</text>
+                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">v_2048 ➔ 4×512d ➔ 4×588px ➔ 28×28 像素重构</text>
                     </g>
                   </g>
                 </svg>
 
                 <div style={{ background: '#0F172A', padding: '10px 14px', borderRadius: '6px', fontSize: '0.88rem', color: '#94A3B8', marginTop: '6px' }}>
-                  💡 <b>嵌入过程与顺序关系说明:</b> 离散文本经过 BPE 查表转为 7,168 维向量；连续图像经过 Patch 切片(588d) ➔ ViT(512d) ➔ Pixel Shuffle(2048d) ➔ W_proj 矩阵对齐升维(7,168d)。最终在物理序列中<b>按交错顺序 `[Prefix文本 ➔ 图像Token ➔ Suffix文本]` 拼接为 7,168 维数据流 Stream X，送入 93 层 Backbone！</b>
+                  💡 <b>全流程拓扑图逻辑说明:</b>
+                  <br />
+                  1. <b>前向输入</b>：文本经 BPE 查表成 7,168d 向量；图像经 14×14 切片 ➔ 512 卷积核覆盖点乘 (512d) ➔ 2×2 Pixel Shuffle 空间打平 (2,048d) ➔ W_proj 矩阵升维对齐 (7,168d)。
+                  <br />
+                  2. <b>序列组装与模型处理</b>：按交错顺序 `[Prefix文本 ➔ 图像Token ➔ Suffix文本]` 组成 Stream X，送入 93 层 Backbone 处理。
+                  <br />
+                  3. <b>逆向解码与还原</b>：文本路经 W_unembed 逆向投影为 151,643 维 Logits 解码成字符；图像路经 Un-shuffle 与转置卷积 `ConvTranspose2d` 还原出 28×28 原始 RGB 像素！
                 </div>
               </div>
 
@@ -420,7 +461,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #A78BFA' }}>
                     <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>🖼️ 图像 Projection：编解码重采样 (Resampling Codec)</span>
                     <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      类似于视频/图像编解码器的空间下采样与格式转换，将 2D 像素打碎、抽取深层卷积语义、降采样后再做空间特征打平。
+                      类似于视频/图像编解码器的空间下采样与格式转换，将 2D 像素打碎、用 512 卷积核抽取特征、2×2 Shuffle 打平后再用 W_proj 空间升维对齐。
+                    </p>
+                  </div>
+
+                  <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #EC4899' }}>
+                    <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem' }}>🔄 逆向解码：格式反冲洗与解压缩 (Decoder Unpack)</span>
+                    <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                      文本反向查 W_unembed 表算概率；图像通过 Un-shuffle 拆为 4×512d 并过转置卷积 `ConvTranspose2d` 恢复 RGB 像素点阵。
                     </p>
                   </div>
 
@@ -437,21 +485,26 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   
                   <div style={{ background: '#0F172A', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '6px' }}>// 文本与图像 Layer 0 矩阵对齐公式：</div>
-                    <div style={{ color: '#38BDF8', fontFamily: 'monospace', fontSize: '0.95rem' }}>
+                    <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '6px' }}>// 前向与逆向 Layer 0 全逻辑 LaTeX 公式：</div>
+                    <div style={{ color: '#38BDF8', fontFamily: 'monospace', fontSize: '0.92rem' }}>
                       e_text = W_emb[token_id]  ∈ ℝ^(7,168)
                     </div>
-                    <div style={{ color: '#10B981', fontFamily: 'monospace', fontSize: '0.95rem', marginTop: '6px' }}>
-                      e_img = W_proj · PixelShuffle(f_ViT(x_patch))  ∈ ℝ^(7,168)
+                    <div style={{ color: '#10B981', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
+                      e_img = W_proj · PixelShuffle(Conv2d_512(x_patch))  ∈ ℝ^(7,168)
+                    </div>
+                    <div style={{ color: '#EC4899', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
+                      x_recon = ConvTranspose2d(UnShuffle(v_2048))  ∈ ℝ^(28×28×3)
                     </div>
                   </div>
 
                   <div style={{ background: '#0B0F19', padding: '12px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#E2E8F0', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch 最小对齐实现:</div>
+                    <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch 前向与逆向完整实现:</div>
                     <div style={{ color: stepIdx === 0 ? '#38BDF8' : '#64748B' }}>x_txt = self.w_emb(text_ids)  # [B, T_txt, 7168]</div>
-                    <div style={{ color: stepIdx === 2 ? '#A78BFA' : '#64748B' }}>f_vit = self.vit_encoder(patches)  # [B, N, 512]</div>
+                    <div style={{ color: stepIdx === 2 ? '#10B981' : '#64748B' }}>f_vit = self.conv2d_512(patches)  # [B, N, 512]</div>
                     <div style={{ color: stepIdx === 3 ? '#F59E0B' : '#64748B' }}>v_2048 = pixel_shuffle(f_vit, r=2)  # [B, N/4, 2048]</div>
                     <div style={{ color: stepIdx === 4 ? '#10B981' : '#64748B' }}>x_img = self.w_proj(v_2048)  # [B, N/4, 7168]</div>
+                    <div style={{ color: stepIdx === 6 ? '#EC4899' : '#64748B' }}>logits = self.w_unembed(h_out)  # [B, T, 151643]</div>
+                    <div style={{ color: stepIdx === 6 ? '#EC4899' : '#64748B' }}>img_pix = self.deconv(unshuffle(v_2048))  # [B, 3, 28, 28]</div>
                   </div>
 
                 </div>
