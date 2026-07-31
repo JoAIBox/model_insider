@@ -2,53 +2,58 @@ import React, { useState, useEffect, useRef } from 'react';
 
 // Pipeline Steps for Multimodal Token Alignment & End-to-End Compute Graph
 const pipelineSteps = [
-  { id: 0, title: "1. 文本 BPE 分词与查表", desc: "文本字符串 ➔ Token ID ➔ W_emb[ID] 查表生成 7,168 维文本向量", output: "x_text ∈ ℝ^7,168", type: "text" },
-  { id: 1, title: "2. 图像 14×14 切片遍历", desc: "28×28 RGB 图像平铺划分为 4 个 14×14×3 (588d) 像素切片 Patch", output: "Patch x_p ∈ ℝ^(4 × 588px)", type: "vision" },
-  { id: 2, title: "3. 512 卷积核 (MoonViT)", desc: "512 个 14×14×3 卷积核覆盖点积卷积 ➔ 提取 4 个 512 维特征向量", output: "f_vit ∈ ℝ^(4 × 512d)", type: "vision" },
-  { id: 3, title: "4. 2×2 Pixel Shuffle 拼接", desc: "2×2 邻近 4 个 512d 向量空间打平融合 ➔ 合成为 1 个 2,048 维图像 Token", output: "v_2048 ∈ ℝ^2,048", type: "vision" },
-  { id: 4, title: "5. W_proj 矩阵线性投影", desc: "W_proj [7168×2048] 矩阵相乘投影 ➔ 升维对齐至 7,168 维统一高维空间", output: "x_vis ∈ ℝ^7,168", type: "vision" },
-  { id: 5, title: "6. 前向交错序列组装", desc: "[Prefix文本 ➔ 图像Token ➔ Suffix文本] 拼装为数据流 Stream X ➔ 送入 93 层 Backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
-  { id: 6, title: "7. 逆向解码与还原输出", desc: "文本路: W_unembed ➔ Softmax ➔ 预测Token; 图像路: Un-shuffle ➔ ConvTranspose2d ➔ 重构 28×28 像素", output: "Text & Image Output", type: "decoder" }
+  { id: 0, title: "1. 文本 BPE 分词与向量查表", desc: "文本字符串 ➔ BPE 划分为 Token ID ➔ W_emb[ID] 查表生成 7,168 维文本向量", output: "x_text ∈ ℝ^7,168", type: "text" },
+  { id: 1, title: "2. 图像 14×14 切片滑窗扫描", desc: "28×28 图像划分为 4 个 14×14×3 (588d) 像素切片 Patch", output: "Patch x_p ∈ ℝ^(4 × 588px)", type: "vision" },
+  { id: 2, title: "3. 512 卷积核点积特征提取", desc: "512 个 14×14×3 卷积核覆盖点乘 ➔ 抽取 4 个 512 维特征向量", output: "f_vit ∈ ℝ^(4 × 512d)", type: "vision" },
+  { id: 3, title: "4. 2×2 Pixel Shuffle 空间打包", desc: "4 个 512d 向量空间打平融合 ➔ 打包为 1 个 2,048 维图像 Token (压缩75%)", output: "v_2048 ∈ ℝ^2,048 (1 Token)", type: "vision" },
+  { id: 4, title: "5. W_proj 矩阵升维对齐", desc: "W_proj [7168×2048] 矩阵乘法 ➔ 升维对齐至 7,168 维统一高维空间", output: "x_vis ∈ ℝ^7,168", type: "vision" },
+  { id: 5, title: "6. 前向交错序列物理拼接", desc: "按 [Prefix文本 ➔ 图像Token ➔ Suffix文本] 顺序拼装为 Stream X ➔ 送入 93 层 Backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
+  { id: 6, title: "7. 单步 160K 词表采样与自回归", desc: "Backbone 输出 h_t ➔ W_unembed [160,000×7168] 词表打分 ➔ 采样 1 个 Next Token ↺ 写回 Context", output: "1 Next Token (t=N+1)", type: "decoder" }
 ];
 
 export const MultimodalTokenSimulator: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'patchEncoder' | 'pixelShuffle' | 'latentSpace' | 'decoder'>('overview');
   
   // Interactive Prompt State
-  const [prefixText, setPrefixText] = useState<string>('Show me this');
-  const [suffixText, setSuffixText] = useState<string>('what cat?');
+  const [prefixText, setPrefixText] = useState<string>('Show me');
+  const [suffixText, setSuffixText] = useState<string>('a cat');
 
-  // Step Debugger States for Overview Tab
+  // Dynamic Flow & Animation Control States
   const [stepIdx, setStepIdx] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [speedMs, setSpeedMs] = useState<number>(2000);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true); // Default active live animation
+  const [speedMs, setSpeedMs] = useState<number>(1600);
   const [viewMode, setViewMode] = useState<'math' | 'analogy'>('analogy');
-  const [imgRes, setImgRes] = useState<number>(56); // 56x56 resolution for ablation
+  const [imgRes, setImgRes] = useState<number>(56);
 
-  // Autoregressive Token Generation Timeline State (t = N+1, N+2, N+3)
-  const [genStep, setGenStep] = useState<number>(0); // 0: Prefill Context, 1: Step t=N+1, 2: Step t=N+2, 3: Step t=N+3
-  const stepTokens = [
-    { token: "Token_y1", label: "预测Token #1 (自回归 t=N+1)", color: "#F59E0B" },
-    { token: "Token_y2", label: "预测Token #2 (自回归 t=N+2)", color: "#10B981" },
-    { token: "Token_y3", label: "预测Token #3 (自回归 t=N+3)", color: "#EC4899" }
+  // Active patch animation highlight index
+  const [activeScanPatch, setActiveScanPatch] = useState<number>(0);
+
+  // Autoregressive Token Generation Queue (Simulating step-by-step token generation)
+  const [genStep, setGenStep] = useState<number>(0);
+  const vocabSampleTokens = [
+    { id: 4891, token: "photo", prob: 0.84, type: "text", color: "#F59E0B" },
+    { id: 1024, token: "of", prob: 0.91, type: "text", color: "#10B981" },
+    { id: 8931, token: "cat", prob: 0.78, type: "text", color: "#EC4899" }
   ];
 
   // Interactive Patch selection for Step 2 & 3
   const [selectedPatchGroup, setSelectedPatchGroup] = useState<number>(0);
-  
-  // Filter inspector selection for Step 2
-  const [selectedFilterIdx, setSelectedFilterIdx] = useState<number>(12); // Filter #13: Vertical Edge Detector
-
-  // Reconstructed vs Original opacity slider for Step 5
+  const [selectedFilterIdx, setSelectedFilterIdx] = useState<number>(12);
   const [reconOpacity, setReconOpacity] = useState<number>(85);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Playback loop for Step Debugger
+  // Playback loop for Step Debugger and Patch Scanner
   useEffect(() => {
     if (isPlaying) {
       timerRef.current = setInterval(() => {
-        setStepIdx((prev) => (prev + 1) % pipelineSteps.length);
+        setStepIdx((prev) => {
+          const nextStep = (prev + 1) % pipelineSteps.length;
+          if (nextStep === 1 || nextStep === 2) {
+            setActiveScanPatch((p) => (p + 1) % 4);
+          }
+          return nextStep;
+        });
       }, speedMs);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -60,10 +65,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
   // Sample 4x4 Grid images (4 patches of 14x14)
   const samplePatches = [
-    { name: 'Top-Left (Ear Texture)', color: '#FF5555', filterVal: 0.82 },
+    { name: 'Top-Left (Ear Pattern)', color: '#FF5555', filterVal: 0.82 },
     { name: 'Top-Right (Sky Background)', color: '#38BDF8', filterVal: 0.15 },
-    { name: 'Bottom-Left (Fur Detail)', color: '#10B981', filterVal: 0.94 },
-    { name: 'Bottom-Right (Shadow Pattern)', color: '#FFB000', filterVal: 0.61 },
+    { name: 'Bottom-Left (Fur Texture)', color: '#10B981', filterVal: 0.94 },
+    { name: 'Bottom-Right (Shadow Detail)', color: '#FFB000', filterVal: 0.61 },
   ];
 
   const currentStep = pipelineSteps[stepIdx];
@@ -80,11 +85,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
               Layer 0 多模态 Token 全流程计算拓扑与自回归生成先后控制台
             </h2>
             <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid #38BDF8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-              Autoregressive Multimodal Compute Graph (§2.1)
+              Multimodal Tokenizer Simulator (§2.1)
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            解密连续图像经 2×2 Pixel Shuffle 压缩为 N/4 个图像 Token（28×28 块产生 1 个 Token），以及自回归解码每次从 160K 词表中采样单 Token 回流追加的全过程
+            真实展现连续图像如何经过 2×2 Pixel Shuffle 空间打包为 1 个视觉 Token，以及自回归解码如何单次从 160K 词表采样 1 个 Token 回流追加
           </p>
         </div>
 
@@ -103,7 +108,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            1. 自回归生成拓扑图 (Autoregressive Graph)
+            1. 动态全拓扑与自回归 (Compute Graph)
           </button>
           <button
             onClick={() => setActiveTab('patchEncoder')}
@@ -168,49 +173,50 @@ export const MultimodalTokenSimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* TAB 1: THREE-PANEL SYNCHRONIZED INTERACTIVE CONSOLE WITH AUTOREGRESSIVE GENERATION TIMELINE */}
+      {/* TAB 1: THREE-PANEL SYNCHRONIZED INTERACTIVE CONSOLE WITH DYNAMIC COMPUTATION & AUTOREGRESSIVE ENGINE */}
       {activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
-          {/* Top Controls: Prompt & Autoregressive Generation Step Toolbar */}
+          {/* Top Controls: Dynamic Input Prompt & Autoregressive Decoder Step Controls */}
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
             
-            {/* Input Prompt Controls */}
+            {/* Multimodal Prompt Inputs */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>前缀文本:</label>
+                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>前缀文本 Prompt:</label>
                 <input
                   type="text"
                   value={prefixText}
                   onChange={(e) => setPrefixText(e.target.value)}
-                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '3px 8px', borderRadius: '4px', fontSize: '0.9rem', width: '130px' }}
+                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '4px 10px', borderRadius: '4px', fontSize: '0.9rem', width: '130px' }}
                 />
               </div>
 
-              <div style={{ background: 'rgba(167, 139, 250, 0.2)', border: '1px solid #A78BFA', padding: '4px 10px', borderRadius: '4px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                🖼️ [28×28 块 ➔ 生成 1 个图像 Token]
+              <div style={{ background: 'rgba(167, 139, 250, 0.15)', border: '1px solid #A78BFA', padding: '6px 12px', borderRadius: '6px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🖼️ [28×28 图像输入]</span>
+                <span style={{ fontSize: '0.75rem', background: '#0F172A', color: '#10B981', padding: '2px 6px', borderRadius: '4px' }}>打包为 1 Visual Token</span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>后缀文本:</label>
+                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>后缀文本 Prompt:</label>
                 <input
                   type="text"
                   value={suffixText}
                   onChange={(e) => setSuffixText(e.target.value)}
-                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '3px 8px', borderRadius: '4px', fontSize: '0.9rem', width: '130px' }}
+                  style={{ background: '#0F172A', border: '1px solid #38BDF8', color: '#FFF', padding: '4px 10px', borderRadius: '4px', fontSize: '0.9rem', width: '130px' }}
                 />
               </div>
             </div>
 
-            {/* Autoregressive Generation Time Controls */}
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#0B0F19', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+            {/* Autoregressive Step Control Button */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#0B0F19', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
               <span style={{ fontSize: '0.85rem', color: '#F59E0B', fontWeight: 'bold' }}>
-                ⏱️ 预测生成步: {genStep === 0 ? 'Context 并行预热 (Prefill)' : `单 Token 采样 (t=N+${genStep})`}
+                ⏱️ 自回归生成步: {genStep === 0 ? 'Prefill 预热' : `t = N+${genStep}`}
               </span>
               <button
-                onClick={() => setGenStep((prev) => (prev < stepTokens.length ? prev + 1 : 0))}
+                onClick={() => setGenStep((prev) => (prev < vocabSampleTokens.length ? prev + 1 : 0))}
                 style={{
-                  padding: '5px 12px',
+                  padding: '6px 14px',
                   borderRadius: '4px',
                   border: 'none',
                   background: '#F59E0B',
@@ -220,7 +226,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                {genStep < stepTokens.length ? `↻ 预测 160K 词表下一个 Token (t=N+${genStep + 1})` : '🔄 重置为 Context Prefill'}
+                {genStep < vocabSampleTokens.length ? `↻ 预测 160K 词表下一个 Token (t=N+${genStep + 1})` : '🔄 重置 Context'}
               </button>
             </div>
 
@@ -261,14 +267,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
           </div>
 
           {/* 3-Panel Main Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px' }}>
             
-            {/* PANEL 1: END-TO-END COMPUTATION GRAPH & AUTOREGRESSIVE TIMELINE DEBUGGER */}
+            {/* PANEL 1: END-TO-END COMPUTATION GRAPH & AUTOREGRESSIVE ENGINE SVG */}
             <div style={{ background: '#070913', padding: '20px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.1rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                  🎬 区域一：多模态 Token 计算与单步 160K 词表自回归解码拓扑图
+                  🎬 区域一：多模态 Token 全流程计算与 160K 词表自回归拓扑图
                 </h3>
                 <span style={{ fontSize: '0.85rem', background: '#0F172A', color: '#38BDF8', padding: '3px 10px', borderRadius: '4px', fontFamily: 'monospace' }}>
                   Step {stepIdx + 1}/{pipelineSteps.length}: {currentStep.title}
@@ -312,7 +318,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   onClick={() => setIsPlaying(!isPlaying)}
                   style={{ background: isPlaying ? '#EF4444' : '#10B981', color: '#000', border: 'none', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                 >
-                  {isPlaying ? '⏸️ 暂停' : '▶️ 自动播放'}
+                  {isPlaying ? '⏸️ 暂停动画' : '▶️ 自动播放全流程'}
                 </button>
                 <button
                   onClick={() => { setIsPlaying(false); setStepIdx((prev) => (prev + 1) % pipelineSteps.length); }}
@@ -322,7 +328,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 </button>
 
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '10px' }}>
-                  <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>速度:</span>
+                  <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>动画播放速度:</span>
                   <input
                     type="range"
                     min="600"
@@ -337,7 +343,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
               {/* WIDESCREEN END-TO-END COMPUTATION & AUTOREGRESSIVE LOOPBACK GRAPH SVG */}
               <div style={{ background: '#02040a', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <svg viewBox="0 0 940 480" width="100%" height="480">
+                <svg viewBox="0 0 940 500" width="100%" height="500">
                   <defs>
                     <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38BDF8" />
@@ -354,132 +360,139 @@ export const MultimodalTokenSimulator: React.FC = () => {
                     <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#F59E0B" />
                     </marker>
+                    
+                    {/* Linear Gradients for Flow Animation */}
+                    <linearGradient id="flow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.2" />
+                      <stop offset="50%" stopColor="#F59E0B" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity="0.2" />
+                    </linearGradient>
                   </defs>
 
                   {/* === SECTION 1: FORWARD ENCODING COMPUTE GRAPH (TOP HALF) === */}
 
                   {/* 1. TEXT BRANCH: String -> Token ID -> W_emb Lookup */}
                   <g opacity={stepIdx === 0 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="20" y="20" width="170" height="95" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
+                    <rect x="20" y="20" width="170" height="100" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
                     <text x="105" y="44" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">1. 文本 BPE 分词与查表</text>
-                    <text x="105" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{prefixText}" ➔ IDs [4821,1024]</text>
-                    <text x="105" y="82" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 检索</text>
-                    <text x="105" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_text ∈ ℝ^7,168</text>
+                    <text x="105" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{prefixText}" ➔ Token ID</text>
+                    <text x="105" y="82" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 检索硬查找</text>
+                    <text x="105" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_text ∈ ℝ^7,168</text>
                   </g>
 
                   {/* 2. VISION BRANCH A: 28x28 Image & 14x14 Patch Sliding Traversal */}
                   <g opacity={stepIdx === 1 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="210" y="20" width="150" height="95" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx === 1 ? 3 : 1.5} />
+                    <rect x="210" y="20" width="150" height="100" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx === 1 ? 3 : 1.5} />
                     <text x="285" y="44" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">2. 切片遍历 (Patch)</text>
-                    <text x="285" y="64" fill="#FFF" fontSize="11" textAnchor="middle">28×28 图像块</text>
+                    <text x="285" y="64" fill="#FFF" fontSize="11" textAnchor="middle">28×28 图像网格</text>
                     <text x="285" y="82" fill="#A78BFA" fontSize="10" fontFamily="monospace" textAnchor="middle">4 个 14×14×3 切片</text>
-                    <text x="285" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">x_p ∈ ℝ^(4 × 588px)</text>
+                    <text x="285" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">Patch P_{activeScanPatch+1} 点阵</text>
                   </g>
 
-                  <line x1="360" y1="67" x2="378" y2="67" stroke="#A78BFA" strokeWidth="2" markerEnd="url(#arrow-purple)" />
+                  <line x1="360" y1="70" x2="378" y2="70" stroke="#A78BFA" strokeWidth="2" markerEnd="url(#arrow-purple)" />
 
                   {/* 3. VISION BRANCH B: 512 Conv2d Filters (MoonViT) */}
                   <g opacity={stepIdx === 2 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="385" y="20" width="170" height="95" rx="8" fill="#0F172A" stroke="#10B981" strokeWidth={stepIdx === 2 ? 3 : 1.5} />
+                    <rect x="385" y="20" width="170" height="100" rx="8" fill="#0F172A" stroke="#10B981" strokeWidth={stepIdx === 2 ? 3 : 1.5} />
                     <text x="470" y="44" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">3. 512 卷积核 (Conv2d)</text>
                     <text x="470" y="64" fill="#FFF" fontSize="11" textAnchor="middle">512 个 14×14×3 卷积核</text>
-                    <text x="470" y="82" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">覆盖点乘抽取</text>
-                    <text x="470" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">f_vit ∈ ℝ^(4 × 512d)</text>
+                    <text x="470" y="82" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">覆盖点乘卷积</text>
+                    <text x="470" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">f_vit ∈ ℝ^(4 × 512d)</text>
                   </g>
 
-                  <line x1="555" y1="67" x2="573" y2="67" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
+                  <line x1="555" y1="70" x2="573" y2="70" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-green)" />
 
                   {/* 4. VISION BRANCH C: 2x2 Pixel Shuffle Synthesis (2048d -> 1 Visual Token) */}
                   <g opacity={stepIdx === 3 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="580" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#F59E0B" strokeWidth={stepIdx === 3 ? 3 : 1.5} />
+                    <rect x="580" y="20" width="160" height="100" rx="8" fill="#0F172A" stroke="#F59E0B" strokeWidth={stepIdx === 3 ? 3 : 1.5} />
                     <text x="660" y="44" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">4. 2×2 Pixel Shuffle</text>
-                    <text x="660" y="64" fill="#FFF" fontSize="11" textAnchor="middle">4×512d 空间打平</text>
-                    <text x="660" y="82" fill="#F59E0B" fontSize="10" fontFamily="monospace" textAnchor="middle">压缩为 1个图像Token!</text>
-                    <text x="660" y="98" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">v_2048 ∈ ℝ^2,048</text>
+                    <text x="660" y="64" fill="#FFF" fontSize="11" textAnchor="middle">4×512d 空间打包打平</text>
+                    <text x="660" y="82" fill="#F59E0B" fontSize="10" fontFamily="monospace" textAnchor="middle">打包为 1个图像Token!</text>
+                    <text x="660" y="100" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">v_2048 ∈ ℝ^2,048</text>
                   </g>
 
-                  <line x1="740" y1="67" x2="760" y2="67" stroke="#F59E0B" strokeWidth="2" />
-                  <line x1="760" y1="67" x2="760" y2="135" stroke="#F59E0B" strokeWidth="2" markerEnd="url(#arrow-green)" />
+                  <line x1="740" y1="70" x2="760" y2="70" stroke="#F59E0B" strokeWidth="2" />
+                  <line x1="760" y1="70" x2="760" y2="135" stroke="#F59E0B" strokeWidth="2" markerEnd="url(#arrow-green)" />
 
                   {/* 5. VISION BRANCH D: W_proj Matrix Projection (7168d) */}
                   <g opacity={stepIdx === 4 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
-                    <rect x="650" y="140" width="220" height="70" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth={stepIdx === 4 ? 3 : 1.5} />
+                    <rect x="650" y="140" width="220" height="75" rx="8" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth={stepIdx === 4 ? 3 : 1.5} />
                     <text x="760" y="165" fill="#10B981" fontSize="13" fontWeight="bold" textAnchor="middle">5. 线性投影 W_proj 对齐</text>
                     <text x="760" y="185" fill="#FFF" fontSize="11" fontFamily="monospace" textAnchor="middle">W_proj [7168×2048] 矩阵乘法</text>
-                    <text x="760" y="200" fill="#10B981" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_vis = W_proj · v_2048 ∈ ℝ^7,168</text>
+                    <text x="760" y="202" fill="#10B981" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_vis = W_proj · v_2048 ∈ ℝ^7,168</text>
                   </g>
 
                   {/* === SECTION 2: INTERLEAVED SEQUENCE & BACKBONE (MIDDLE) === */}
 
                   {/* Flow lines down to sequence stream */}
-                  <line x1="105" y1="115" x2="105" y2="245" stroke="#38BDF8" strokeWidth="2.5" />
-                  <line x1="105" y1="245" x2="140" y2="245" stroke="#38BDF8" strokeWidth="2.5" markerEnd="url(#arrow-blue)" />
+                  <line x1="105" y1="120" x2="105" y2="255" stroke="#38BDF8" strokeWidth="2.5" />
+                  <line x1="105" y1="255" x2="140" y2="255" stroke="#38BDF8" strokeWidth="2.5" markerEnd="url(#arrow-blue)" />
 
-                  <line x1="760" y1="210" x2="760" y2="245" stroke="#10B981" strokeWidth="2.5" />
-                  <line x1="760" y1="245" x2="720" y2="245" stroke="#10B981" strokeWidth="2.5" markerEnd="url(#arrow-green)" />
+                  <line x1="760" y1="215" x2="760" y2="255" stroke="#10B981" strokeWidth="2.5" />
+                  <line x1="760" y1="255" x2="720" y2="255" stroke="#10B981" strokeWidth="2.5" markerEnd="url(#arrow-green)" />
 
                   {/* 6. Interleaved Physical Sequence Bar & Autoregressive Loopback Stream */}
                   <g opacity={stepIdx === 5 || stepIdx === 0 || stepIdx === 4 ? 1 : 0.75} style={{ transition: 'all 0.3s' }}>
-                    <rect x="140" y="225" width="580" height="85" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
-                    <text x="430" y="246" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
+                    <rect x="140" y="235" width="580" height="90" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
+                    <text x="430" y="258" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
                       6. 前向交错序列 Stream X ➔ 送入 93 层 Backbone 处理 (KDA + AttnRes + LatentMoE)
                     </text>
 
                     {/* Sequential Order Visual Blocks (Prefill Tokens + 1-by-1 Autoregressive Appended Token) */}
-                    <g transform="translate(155, 256)">
-                      <rect x="0" y="0" width="110" height="24" rx="4" fill="#38BDF8" />
-                      <text x="55" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_prefix (Text)</text>
+                    <g transform="translate(155, 270)">
+                      <rect x="0" y="0" width="110" height="26" rx="4" fill="#38BDF8" />
+                      <text x="55" y="17" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_prefix (Text)</text>
 
-                      <rect x="118" y="0" width="150" height="24" rx="4" fill="#10B981" />
-                      <text x="193" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1个x_vision (28×28 Image)</text>
+                      <rect x="118" y="0" width="150" height="26" rx="4" fill="#10B981" />
+                      <text x="193" y="17" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1个x_vis (28×28 Image)</text>
 
-                      <rect x="276" y="0" width="110" height="24" rx="4" fill="#38BDF8" />
-                      <text x="331" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_suffix (Text)</text>
+                      <rect x="276" y="0" width="110" height="26" rx="4" fill="#38BDF8" />
+                      <text x="331" y="17" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">x_suffix (Text)</text>
 
                       {/* Autoregressive Appended Single Token y_t appearing step by step */}
                       {genStep >= 1 && (
                         <g transform="translate(394, 0)">
-                          <rect x="0" y="0" width="50" height="24" rx="4" fill="#F59E0B" />
-                          <text x="25" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y1</text>
+                          <rect x="0" y="0" width="50" height="26" rx="4" fill="#F59E0B" />
+                          <text x="25" y="17" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y1</text>
                         </g>
                       )}
                       {genStep >= 2 && (
                         <g transform="translate(448, 0)">
-                          <rect x="0" y="0" width="50" height="24" rx="4" fill="#10B981" />
-                          <text x="25" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y2</text>
+                          <rect x="0" y="0" width="50" height="26" rx="4" fill="#10B981" />
+                          <text x="25" y="17" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y2</text>
                         </g>
                       )}
                       {genStep >= 3 && (
                         <g transform="translate(502, 0)">
-                          <rect x="0" y="0" width="50" height="24" rx="4" fill="#EC4899" />
-                          <text x="25" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y3</text>
+                          <rect x="0" y="0" width="50" height="26" rx="4" fill="#EC4899" />
+                          <text x="25" y="17" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Token_y3</text>
                         </g>
                       )}
                     </g>
                   </g>
 
                   {/* === SECTION 3: BACKWARD / DECODING RECONSTRUCTION GRAPH & LOOPBACK === */}
-                  <line x1="430" y1="310" x2="430" y2="340" stroke="#EC4899" strokeWidth="2.5" markerEnd="url(#arrow-pink)" />
+                  <line x1="430" y1="325" x2="430" y2="355" stroke="#EC4899" strokeWidth="2.5" markerEnd="url(#arrow-pink)" />
 
                   {/* 7. DECODING PIPELINE BOX */}
                   <g opacity={stepIdx === 6 || genStep > 0 ? 1 : 0.6} style={{ transition: 'all 0.3s' }}>
-                    <rect x="60" y="345" width="740" height="95" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
-                    <text x="430" y="368" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
-                      7. 单步 160K 词表采样解码与自回归追加 (160K Vocabulary Sampling & Loopback)
+                    <rect x="60" y="360" width="740" height="100" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
+                    <text x="430" y="384" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
+                      7. 单步 160K 词表采样解码与自回归追加 (160K Vocabulary Sampling & Write-Back)
                     </text>
 
                     {/* Left Decoder Branch: 160K Vocabulary Text Decoding */}
-                    <g transform="translate(80, 378)">
-                      <rect x="0" y="0" width="310" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
+                    <g transform="translate(80, 396)">
+                      <rect x="0" y="0" width="310" height="52" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
                       <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 W_unembed [160,000×7,168] 词表打分</text>
                       <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">
-                        {genStep === 0 ? 'h_t ➔ 160K Logits ➔ Softmax ➔ 采样 1 个 Next Token' : `采样输出 1 个 Token (t=N+${genStep}): ${stepTokens[genStep - 1]?.token}`}
+                        {genStep === 0 ? 'h_t ➔ 160K Logits ➔ Softmax ➔ 采样 1 个 Next Token' : `采样输出 1 个 Token (t=N+${genStep}): ${vocabSampleTokens[genStep - 1]?.token}`}
                       </text>
                     </g>
 
                     {/* Right Decoder Branch: Image Reconstruction */}
-                    <g transform="translate(420, 378)">
-                      <rect x="0" y="0" width="360" height="50" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
+                    <g transform="translate(420, 396)">
+                      <rect x="0" y="0" width="360" height="52" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
                       <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ 图像还原: Un-shuffle ➔ ConvTranspose2d</text>
                       <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">1个v_2048 ➔ 4×512d ➔ 4×588px ➔ 28×28 像素重构</text>
                     </g>
@@ -487,15 +500,15 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
                   {/* === AUTOREGRESSIVE GOLDEN LOOPBACK ARROW (Loopback Arc) === */}
                   <path
-                    d="M 235 428 C 30 428, 30 265, 130 265"
+                    d="M 235 448 C 30 448, 30 280, 130 280"
                     fill="none"
                     stroke="#F59E0B"
                     strokeWidth="3"
                     strokeDasharray="6,4"
                     markerEnd="url(#arrow-gold)"
                   />
-                  <rect x="25" y="335" width="135" height="26" rx="4" fill="#F59E0B" />
-                  <text x="92" y="352" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">
+                  <rect x="25" y="350" width="135" height="26" rx="4" fill="#F59E0B" />
+                  <text x="92" y="367" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">
                     ↺ 单 Token 回流追加 (Write Back)
                   </text>
                 </svg>
@@ -503,7 +516,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 <div style={{ background: '#0F172A', padding: '10px 14px', borderRadius: '6px', fontSize: '0.88rem', color: '#94A3B8', marginTop: '6px' }}>
                   💡 <b>严格符合 Kimi K3 架构规范的 Token 数量与采样逻辑:</b>
                   <br />
-                  1. <b>图像分支 Token 压缩率</b>：2×2 Pixel Shuffle 将 4 个 14×14 ViT 512d 特征块压缩为 <b>仅 1 个 2,048d 图像 Token</b>（升维后为 1 个 7,168d Token），使图像视觉 Token 数量锐减 75%！
+                  1. <b>图像分支 Token 压缩率</b>：2×2 Pixel Shuffle 将 4 个 14×14 ViT 512d 特征块打包为 <b>仅 1 个 2,048d 图像 Token</b>（升维后为 1 个 7,168d Token），使图像视觉 Token 数量锐减 75%！
                   <br />
                   2. <b>自回归解码单 Token 采样</b>：每次时间步 $t$，模型过 W_unembed 对 <b>160,000 (160K) 维词表</b>打分，<b>单次仅采样产生 1 个 Next Token</b>；该 Token 沿黄色回路写回 (Write Back) 上下文末尾，驱动下一步推演！
                 </div>
