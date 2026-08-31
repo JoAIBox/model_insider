@@ -18,7 +18,7 @@ export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode =
             📥 Layer Input State h_{layerId}
           </h4>
           <p style={{ fontSize: '1.08rem', color: '#94A3B8', lineHeight: '1.5', margin: '0' }}>
-            Layer {layerId} directly receives the merged hidden state sequence <b>h_{layerId} ∈ ℝ^(T × 7,168)</b> output by the previous layer. (💡 单击查看初步概要 | 双击直接跳转详细算法推导)
+            Layer {layerId} directly receives the merged hidden state sequence <b>h_{layerId} ∈ ℝ^(T × 7,168)</b> output by the previous layer. (💡 Click for a summary | double-click the diagram for the detailed derivation)
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode =
         <p style={{ fontSize: '1.08rem', color: '#94A3B8', lineHeight: '1.5', margin: '0' }}>
           Text tokens directly undergo discrete vocabulary lookup to generate <b>7,168-dimensional embeddings</b>.
           Image patches pass through MoonViT-V2, 2×2 Pixel Shuffle space downsampling, and linear projection W_proj to generate continuous <b>7,168-dimensional visual feature vectors</b>.
-          Then, both are spliced along sequence length. (💡 单击查看初步概要 | 双击框图直接跳转详细推导)
+          Then, both are concatenated along the sequence dimension. (💡 Click for a summary | double-click the diagram for the detailed derivation)
         </p>
       </div>
 

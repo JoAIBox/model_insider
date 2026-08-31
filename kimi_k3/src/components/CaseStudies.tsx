@@ -136,9 +136,9 @@ export const CaseStudies: React.FC = () => {
                   <text x="220" y="32" fill="#94A3B8" fontSize="12">L20 Peak Compute Peak (59 TFLOPS)</text>
 
                   {/* Scatter points */}
-                  {/* MiniTriton GEMM (90% cuBLAS) */}
+                  {/* MiniTriton GEMM (approximately 90% of the measured roof reference) */}
                   <circle cx="160" cy="45" r="4.5" fill="#10B981" />
-                  <text x="170" y="48" fill="#10B981" fontSize="12" fontWeight="bold">MiniTriton GEMM (90% cuBLAS)</text>
+                  <text x="170" y="48" fill="#10B981" fontSize="12" fontWeight="bold">MiniTriton GEMM (≈90% measured roof)</text>
 
                   {/* Standard Triton Template */}
                   <circle cx="100" cy="78" r="4" fill="#EF4444" />
@@ -151,7 +151,7 @@ export const CaseStudies: React.FC = () => {
               </div>
 
               <p style={{ color: '#94A3B8', fontSize: '1.02rem', marginTop: '12px', lineHeight: '1.4' }}>
-                💡 <b>Performance & Roofline Analysis (Item 29):</b> On NVIDIA L20, Roofline analysis shows MiniTriton fully saturates on-chip compute units, achieving ~90% of closed-source <b>cuBLAS performance</b> on Tensor Core matrix multiplies. The generated KDA forward kernels are significantly faster than standard Triton templates. A GPT model trained using MiniTriton converges to a loss matching PyTorch native operators within tiny rounding limits.
+                💡 <b>Performance & Roofline Analysis (Item 29):</b> On NVIDIA L20, the report presents MiniTriton as approaching approximately <b>90% of the measured machine roof</b> for the tested Tensor Core matrix multiplies; this is not the same as claiming full hardware saturation or a universal 90% cuBLAS result. The generated KDA forward kernels are significantly faster than standard Triton templates. A GPT model trained using MiniTriton converges to a loss matching PyTorch native operators within tiny rounding limits.
               </p>
             </div>
           )}
@@ -165,7 +165,7 @@ export const CaseStudies: React.FC = () => {
                   <span style={{ color: '#FFF' }}>KDA-MLA & NoPE-MLA Hybrid Hardware Inference</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1E293B', paddingBottom: '4px', paddingTop: '4px' }}>
-                  <span style={{ color: '#94A3B8' }}>Silicon Area Target</span>
+                  <span style={{ color: '#94A3B8' }}>Synthesized Area Estimate</span>
                   <span style={{ color: '#FFF' }}>4 mm² (Nangate45 Cell Library)</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1E293B', paddingBottom: '4px', paddingTop: '4px' }}>
@@ -177,8 +177,8 @@ export const CaseStudies: React.FC = () => {
                   <span style={{ color: '#10B981', fontWeight: 'bold' }}>8,700+ tokens / s</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1E293B', paddingBottom: '4px', paddingTop: '4px' }}>
-                  <span style={{ color: '#94A3B8' }}>Integrated Gate Count</span>
-                  <span style={{ color: '#FFF' }}>1.46 M Gates</span>
+                  <span style={{ color: '#94A3B8' }}>Integrated standard-cell count</span>
+                  <span style={{ color: '#FFF' }}>1.46 M standard cells</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px' }}>
                   <span style={{ color: '#94A3B8' }}>On-chip SRAM Capacity</span>
@@ -233,10 +233,10 @@ export const CaseStudies: React.FC = () => {
             {activeCase === 'chip' && (
               <div style={{ fontSize: '1.02rem', color: '#94A3B8', lineHeight: '1.6' }}>
                 <p style={{ marginBottom: '10px' }}>
-                  • <b>48-Hour Tape-Out:</b> In a 48-hour autonomous run, starting from schematic descriptions, the model mapped to the Nangate45 library and laid out 1.46M standard gates using open-source EDA tools.
+                  • <b>48-Hour RTL Design Prototype:</b> In a 48-hour autonomous design run, the prototype mapped from schematic descriptions to the Nangate45 library and RTL-simulated an implementation containing 1.46M standard cells using open-source EDA tools. This does not mean that a physical chip was taped out.
                 </p>
                 <p style={{ marginBottom: '10px' }}>
-                  • <b>Hardwired Gating Logic:</b> The nano-KPU hardware hardwires KDA forget gate calculations into dedicated Multiply-Accumulate (MAC) arrays (INT4 MAC + fused dequantization), yielding an exceptional throughput of 8,700 tokens/s.
+                  • <b>RTL-Simulated Throughput:</b> The prototype reports 8,700+ tokens/s at 100 MHz with 0.277 MiB on-chip SRAM. The report describes an inference-chip prototype, not a fabricated silicon product.
                 </p>
               </div>
             )}
@@ -254,7 +254,7 @@ export const CaseStudies: React.FC = () => {
           </div>
 
           <div style={{ borderTop: '1px solid #1E293B', paddingTop: '10px', marginTop: '15px', color: '#38BDF8', fontSize: '1.02rem' }}>
-            🛠️ <b>Open-Source Code Verification:</b> Both the MiniTriton compiler and the nano-KPU RTL designs have been successfully exported and published on GitHub for community replication.
+            🛠️ <b>Evidence boundary:</b> The case-study figures summarize reported experiments and prototypes. They should not be read as evidence of a fabricated nano-KPU chip or as a universal performance guarantee.
           </div>
         </div>
 

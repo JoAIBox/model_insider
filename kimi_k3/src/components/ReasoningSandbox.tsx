@@ -102,6 +102,17 @@ export const ReasoningSandbox: React.FC = () => {
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
+  const effortLevels: EffortLevel[] = ['low', 'high', 'max'];
+
+  const handleEffortKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const direction = event.key === 'ArrowRight' ? 1 : -1;
+    const nextIndex = (index + direction + effortLevels.length) % effortLevels.length;
+    setLevel(effortLevels[nextIndex]);
+    const radioButtons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+    radioButtons?.[nextIndex]?.focus();
+  };
 
   const runSimulation = () => {
     if (isRunning) return;
@@ -143,10 +154,10 @@ export const ReasoningSandbox: React.FC = () => {
       <header>
         <div className="badge">Chapter 4.2 - Reasoning Effort RL Sandbox</div>
         <h1>Reinforcement Learning & Reasoning Extrapolation Sandbox</h1>
-        <p className="subtitle">Solving complex problems through On-Policy Multi-Expert Distillation and adaptive reasoning depth</p>
+        <p className="subtitle">Solving complex problems through Multi-Teacher On-Policy Distillation and adaptive reasoning depth</p>
       </header>
 
-      <div className="grid-2">
+      <div className="grid-2 reasoning-layout">
         <div className="card">
           <div className="card-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
@@ -165,33 +176,58 @@ export const ReasoningSandbox: React.FC = () => {
               <option value="agent">Agent Troubleshooting: Autonomous Detection and Self-Healing of MySQL Container Crash</option>
             </select>
           </div>
+          <small style={{ display: 'block', color: '#64748B', lineHeight: '1.45', marginTop: '-8px' }}>
+            Code outputs are simplified teaching skeletons for comparing reasoning effort, not drop-in production implementations.
+          </small>
 
-          <div className="effort-selectors">
-            <div 
+          <div className="effort-selectors" role="radiogroup" aria-label="Reasoning effort level">
+            <button
+              type="button"
               className={`effort-option ${level === 'low' ? 'active' : ''} ${isRunning ? 'btn-disabled' : ''}`} 
               data-level="low"
               onClick={() => !isRunning && setLevel('low')}
+              onKeyDown={(event) => handleEffortKeyDown(event, 0)}
+              role="radio"
+              aria-checked={level === 'low'}
+              tabIndex={level === 'low' ? 0 : -1}
+              disabled={isRunning}
             >
               <h4>Low Effort</h4>
               <p>Lightweight Direct Answer</p>
-            </div>
-            <div 
+            </button>
+            <button
+              type="button"
               className={`effort-option ${level === 'high' ? 'active' : ''} ${isRunning ? 'btn-disabled' : ''}`} 
               data-level="high"
               onClick={() => !isRunning && setLevel('high')}
+              onKeyDown={(event) => handleEffortKeyDown(event, 1)}
+              role="radio"
+              aria-checked={level === 'high'}
+              tabIndex={level === 'high' ? 0 : -1}
+              disabled={isRunning}
             >
               <h4>High Effort</h4>
               <p>Structured Chain of Thought</p>
-            </div>
-            <div 
+            </button>
+            <button
+              type="button"
               className={`effort-option ${level === 'max' ? 'active' : ''} ${isRunning ? 'btn-disabled' : ''}`} 
               data-level="max"
               onClick={() => !isRunning && setLevel('max')}
+              onKeyDown={(event) => handleEffortKeyDown(event, 2)}
+              role="radio"
+              aria-checked={level === 'max'}
+              tabIndex={level === 'max' ? 0 : -1}
+              disabled={isRunning}
             >
               <h4>Max Effort</h4>
               <p>Deep Search & Sandbox Debugging</p>
-            </div>
+            </button>
           </div>
+
+          <small style={{ display: 'block', color: '#64748B', marginTop: '-8px' }}>
+            Keyboard: Tab to focus · Arrow keys to change · Enter or Space to select
+          </small>
 
           <button 
             className="btn-primary" 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { LearningGuide } from './LearningGuide';
 import { MacroArchitectureFlow } from './MacroArchitectureFlow';
 import { ConceptGlossary } from './ConceptGlossary';
@@ -43,6 +43,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
   const [showAllArcs, setShowAllArcs] = useState<boolean>(false);
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
   const [selectedMicroNode, setSelectedMicroNode] = useState<'input' | 'attention' | 'path' | 'residual'>('input');
+  const topologyViewportRef = useRef<HTMLDivElement>(null);
   
   // Vision tower selection
   const [showVisionDetail, setShowVisionDetail] = useState<boolean>(false);
@@ -52,10 +53,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
 
   // Timeline data
   const timelineStages = [
-    { title: "8K stage", desc: "The report states that pre-training begins with an 8K-token context." },
-    { title: "64K stage", desc: "The context is extended to 64K tokens during pre-training." },
-    { title: "256K stage", desc: "Cooldown extends the context to 256K tokens." },
-    { title: "1M stage", desc: "Cooldown then extends the context to 1M tokens." }
+    {
+      title: "8K stage",
+      tokens: "8K",
+      tokenCount: 8192,
+      phase: "Pre-training",
+      desc: "The report states that pre-training begins with an 8K-token context.",
+      whatChanges: "Training sequences are capped at 8K tokens for this curriculum stage. The model weights and 93-layer architecture do not change; the sequence-length limit and data packing do.",
+      why: "A shorter window makes early training substantially cheaper and lets the model first learn local syntax, semantics, and basic multimodal sequence processing.",
+      memory: "Reference scale: 1× sequence-dependent cache / activation length.",
+    },
+    {
+      title: "64K stage",
+      tokens: "64K",
+      tokenCount: 65536,
+      phase: "Pre-training",
+      desc: "The context is extended to 64K tokens during pre-training.",
+      whatChanges: "The maximum training sequence is increased from 8K to 64K. This is an 8× longer sequence; exact batch size, number of steps, and parallelism settings are not disclosed.",
+      why: "The model is exposed to longer dependencies while remaining in the main pre-training regime, so long-range retrieval is learned before the final long-context refinement.",
+      memory: "Illustrative sequence-dependent scale: 8× the 8K reference for an O(N) cache term; KDA's recurrent-state term remains O(1) in N.",
+    },
+    {
+      title: "256K stage",
+      tokens: "256K",
+      tokenCount: 262144,
+      phase: "Cooldown",
+      desc: "Cooldown extends the context to 256K tokens.",
+      whatChanges: "The cooldown data is packed and trained with sequences up to 256K tokens. The report does not disclose the exact batch-size schedule, sampling mixture, or number of cooldown steps.",
+      why: "Cooldown concentrates compute on adapting the already-trained model to much longer sequences and reducing the distribution shift between ordinary training lengths and long-context use.",
+      memory: "Illustrative sequence-dependent scale: 32× the 8K reference for an O(N) cache term; KDA recurrent state is still fixed-shape, while MLA latent KV entries still grow with tokens.",
+    },
+    {
+      title: "1M stage",
+      tokens: "1M",
+      tokenCount: 1000000,
+      phase: "Cooldown",
+      desc: "Cooldown then extends the context to 1M tokens.",
+      whatChanges: "The maximum curriculum length reaches 1M tokens. This describes the training context curriculum, not a claim that every request must contain 1M tokens or that all runtime memory is constant.",
+      why: "The final stage teaches the model to preserve and retrieve information across the target ultra-long range, subject to the serving implementation and available memory.",
+      memory: "Illustrative sequence-dependent scale: about 122.1× the 8K reference for an O(N) cache term (1,000,000 ÷ 8,192); KDA state remains O(1) in sequence length, but MLA latent KV cache and other runtime buffers grow with N.",
+    }
   ];
 
   const microNodeDetails = selectedLayer?.isInputStage
@@ -132,8 +169,8 @@ Mixes features along the channel dimension. Each token is distributed to 2 share
 1. Shared Experts Forward: y_shared = E_1_shared(x_t) + E_2_shared(x_t) (Operates on the full width d=7,168)
 2. Latent Space Down-projection: z_t = W_↓ · x_t ∈ ℝ^l (Reduces features from d=7,168 to communication space l=3,584)
 3. Quantile Balancing Router (QB Routing):
-   Dynamically updates quantile biases and selects Top-16 experts: T_16(z_t)
-   Calculates routing weights: p_i = Softmax(z_tᵀ · W_route_i)
+   s_t = Sigmoid(W_r · x_t); dispatch uses Top-16(s_t + b_t)
+   Mixture weights use the selected raw scores only: p_i = s_i / Σ_(j∈T_16) s_j
 4. Expert Forward with SiTU-GLU Activation:
    E_i(z_t) = W_up · ( β_1 · tanh(z'_t / β_1) ⊙ Sigmoid(z'_t) ) · W_gate, where z'_t = RMSNorm(W_in · z_t)
    (SiTU-GLU bounds activation scales within |f(x)| ≤ β_1*β_2=100 to prevent activation explosions at 2.8T parameters)
@@ -158,8 +195,9 @@ Directly reads representations from historical block boundaries using an attenti
    Retrieval score: α_(i→l) = Softmax( q_lᵀ · RMSNorm(b_i) / √d )
 4. Weighted Aggregation:
    h_l_read = ∑_(i=0)^(n-1) α_(i→l) · b_i (+ α_(cur→l) · b_n^(local-1) if within the current block)
-5. Residual Addition:
-   h_(l+1) = h_l + h_l_read + SubLayer(h_l) (Combines cross-block retrieval, sequential residual, and sub-layer outputs)`,
+5. Separate residual wrapper (if present):
+   r_l = h_l_read
+   x_(l+1) = x_l + F_l(r_l) (Keeps AttnRes aggregation separate from the outer residual path)`,
         },
       }[selectedMicroNode];
 
@@ -282,7 +320,7 @@ Directly reads representations from historical block boundaries using an attenti
 
       <LearningGuide />
 
-      <MacroArchitectureFlow />
+      <MacroArchitectureFlow onNavigateTab={onNavigateTab} />
 
       <ConceptGlossary />
 
@@ -358,7 +396,25 @@ Directly reads representations from historical block boundaries using an attenti
           <p style={{ fontSize: '1.08rem', color: '#94A3B8', marginBottom: '10px' }}>
             The topology shows the 27-layer MoonViT vision encoder and 93-layer backbone (69 KDA + 24 MLA). The backbone has 23 complete “3 KDA + 1 MLA” cycles (92 layers) plus one final MLA layer. Select any layer to inspect its data path.
           </p>
-          <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+          <small style={{ display: 'block', color: '#64748B', marginBottom: '6px' }}>
+            Use the visible arrows, scrollbar, or swipe/drag horizontally to explore the full topology.
+          </small>
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: '6px' }}>
+            <button
+              type="button"
+              className="btn"
+              aria-label="Scroll topology left"
+              onClick={() => topologyViewportRef.current?.scrollBy({ left: -420, behavior: 'smooth' })}
+              style={{ alignSelf: 'center', padding: '8px 10px', flex: '0 0 auto' }}
+            >
+              ←
+            </button>
+            <div
+              ref={topologyViewportRef}
+              tabIndex={0}
+              aria-label="Scrollable 93-layer architecture topology"
+              style={{ overflowX: 'auto', overflowY: 'hidden', minWidth: 0, flex: 1, scrollbarWidth: 'auto' }}
+            >
             <svg width="100%" height="230" viewBox="0 0 1600 230" preserveAspectRatio="xMinYMin meet" style={{ minWidth: '900px' }}>
                 {/* Defs for arrow markers */}
                 <defs>
@@ -401,7 +457,26 @@ Directly reads representations from historical block boundaries using an attenti
                   const isHighlighted = selectedBlockId === blockId || (hoveredLayer && hoveredLayer.blockId === blockId) || (selectedLayer && selectedLayer.blockId === blockId);
                   
                   return (
-                    <g key={blockId}>
+                    <g
+                      key={blockId}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Select ${blockId === 24 ? 'final MLA block' : `Cycle ${blockId}`}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        const representativeLayer = layers.find((layer) => layer.blockId === blockId);
+                        if (representativeLayer) setSelectedLayer(representativeLayer);
+                        setSelectedBlockId(blockId);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          const representativeLayer = layers.find((layer) => layer.blockId === blockId);
+                          if (representativeLayer) setSelectedLayer(representativeLayer);
+                          setSelectedBlockId(blockId);
+                        }
+                      }}
+                    >
                       <rect 
                         x={startX} 
                         y="65" 
@@ -582,6 +657,16 @@ Directly reads representations from historical block boundaries using an attenti
                   <text x="798" y="9">AttnRes Retrieval (Hover layer to animate)</text>
                 </g>
               </svg>
+            </div>
+            <button
+              type="button"
+              className="btn"
+              aria-label="Scroll topology right"
+              onClick={() => topologyViewportRef.current?.scrollBy({ left: 420, behavior: 'smooth' })}
+              style={{ alignSelf: 'center', padding: '8px 10px', flex: '0 0 auto' }}
+            >
+              →
+            </button>
           </div>
 
           {/* Model Params summary box */}
@@ -654,9 +739,9 @@ Directly reads representations from historical block boundaries using an attenti
                       <line x1="490" y1="62" x2="520" y2="62" stroke="#64748B" strokeWidth="1.5" markerEnd="url(#flow-arrow)" />
                       <line x1="665" y1="62" x2="685" y2="62" stroke="#64748B" strokeWidth="1.5" markerEnd="url(#flow-arrow)" />
 
-                      {/* Standard residual skip: the layer input bypasses the sublayers and is added back. */}
-                      <path d="M 67 36 C 67 12, 592 12, 592 36" fill="none" stroke="#FFB000" strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#flow-arrow)" />
-                      <text x="330" y="16" fill="#FFB000" fontSize="13" fontWeight="bold" textAnchor="middle">standard residual skip: h_l</text>
+                      {/* Comparison-only reference path: intentionally ends before the K3 aggregation node. */}
+                      <path d="M 67 36 C 67 12, 500 12, 500 28" fill="none" stroke="#64748B" strokeWidth="1.5" strokeDasharray="4,3" />
+                      <text x="285" y="16" fill="#94A3B8" fontSize="12" fontWeight="bold" textAnchor="middle">comparison only: sequential residual skip</text>
 
                       {/* Node 1: Layer Input */}
                       <rect x="10" y="36" width="115" height="52" rx="5" fill="#1e293b" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
@@ -699,10 +784,8 @@ Directly reads representations from historical block boundaries using an attenti
 
                       {/* Node 4: AttnRes */}
                       <rect x="520" y="36" width="145" height="52" rx="5" fill="rgba(16, 185, 129, 0.08)" stroke="#10B981" strokeWidth="1.5" />
-                      <text x="592" y="58" fill="#FFF" fontSize="14" textAnchor="middle" fontWeight="bold">Residual + AttnRes</text>
-                      <text x="592" y="76" fill="#10B981" fontSize="12" textAnchor="middle">cross-block retrieval</text>
-                      <circle cx="592" cy="36" r="5" fill="#FFB000" stroke="#FFF" strokeWidth="1" />
-                      <text x="592" y="39.5" fill="#02040a" fontSize="12" fontWeight="bold" textAnchor="middle">+</text>
+                      <text x="592" y="58" fill="#FFF" fontSize="14" textAnchor="middle" fontWeight="bold">Block AttnRes aggregation</text>
+                      <text x="592" y="76" fill="#10B981" fontSize="12" textAnchor="middle">partial sum + block sources</text>
 
                       {/* Node 5: Output */}
                       <rect x="685" y="36" width="70" height="52" rx="5" fill="#1e293b" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
@@ -746,7 +829,7 @@ Directly reads representations from historical block boundaries using an attenti
                       <div style={{ border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '6px', padding: '14px', background: 'rgba(56, 189, 248, 0.02)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1.15rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', paddingBottom: '8px' }}>
                           <span>1. Text & Vision Multimodal Alignment (Layer 0)</span>
-                          <span style={{ color: '#38BDF8', fontSize: '0.88rem' }}>💡 提示：双击上方框图即可直接跳转详细推导</span>
+                          <span style={{ color: '#38BDF8', fontSize: '0.88rem' }}>💡 Tip: double-click a module to open its detailed derivation.</span>
                         </div>
                         <div>
                           <span style={{ fontSize: '1.08rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
@@ -896,11 +979,11 @@ X = [X_prefix, X_vision, X_suffix]`}
                             <MathRenderer 
                               color="#00F2FE"
                               formula={`// Q, K, V with convolution and L2Norm normalization
-q_t, k_t = L2Norm(Swish(ShortConv(W_q/k * x'_t)))
+   q_t, k_t = L2Norm(Swish(ShortConv(W_q/k * x'_t)))
 // Delta recurrent update with channel-wise decay and write strength (S_t size: d_k x d_v)
-S_t = (I - β_t * k_t * k_tᵀ * Diag(α_t)) * S_t-1 + β_t * k_t * v_tᵀ
+S_t = (I - β_t * k_t * k_tᵀ) * Diag(α_t) * S_t-1 + β_t * k_t * v_tᵀ
 // Gated fusion and final projection
-y_t = W_o * (Sigmoid(W_g * x'_t) ⊙ RMSNorm(S_tᵀ * q_t))`}
+y_t = W_o * (Sigmoid(W_g * x_t) ⊙ RMSNorm(S_tᵀ * q_t))`}
                             />
                           ) : (
                             <MathRenderer 
@@ -925,18 +1008,18 @@ y_t = W_o * (Sigmoid(W_g * x_t) ⊙ õ_t)`}
                             {selectedLayer.type === 'KDA' ? (
                               <>
                                 <div>x_t / x'_t</div><div>Input token raw feature / RMSNorm normalized feature</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                                <div>q_t / k_t</div><div>Head-wise retrieval query / key vector (with L2Norm)</div><div style={{ fontFamily: 'monospace' }}>[H * d_k = 128 * 64]</div>
-                                <div>v_t</div><div>Head-wise write value vector</div><div style={{ fontFamily: 'monospace' }}>[H * d_v = 128 * 64]</div>
-                                <div>S_t / S_t-1</div><div>Recurrent accumulated memory state matrix</div><div style={{ fontFamily: 'monospace' }}>[H * d_k * d_v = 128*64*64]</div>
-                                <div>α_t / β_t</div><div>Channel-wise forget gate decay rate / write strength</div><div style={{ fontFamily: 'monospace' }}>[H = 128]</div>
+                                <div>q_t / k_t</div><div>Head-wise retrieval query / key vector (with L2Norm)</div><div style={{ fontFamily: 'monospace' }}>[H = 96; d_k not disclosed]</div>
+                                <div>v_t</div><div>Head-wise write value vector</div><div style={{ fontFamily: 'monospace' }}>[H = 96; d_v not disclosed]</div>
+                                <div>S_t / S_t-1</div><div>Recurrent accumulated memory state matrix</div><div style={{ fontFamily: 'monospace' }}>[96 head states; d_k × d_v not disclosed]</div>
+                                <div>α_t / β_t</div><div>Channel-wise retention factor / write strength</div><div style={{ fontFamily: 'monospace' }}>[H = 96; channel width not disclosed]</div>
                                 <div>y_t</div><div>KDA attention sub-layer final gated projection output</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                               </>
                             ) : (
                               <>
                                 <div>x_t / x'_t</div><div>Input token raw feature / RMSNorm normalized feature</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                                <div>c_t</div><div>Low-rank latent compression intermediate representation (KV Cache node)</div><div style={{ fontFamily: 'monospace' }}>[d_c = 512]</div>
-                                <div>Q_t</div><div>Up-projected query feature</div><div style={{ fontFamily: 'monospace' }}>[H * d_h = 128 * 128]</div>
-                                <div>K_t / V_t</div><div>Up-projected key / value feature</div><div style={{ fontFamily: 'monospace' }}>[H * d_h = 128 * 128]</div>
+                                <div>c_t</div><div>Low-rank latent compression intermediate representation (KV Cache node)</div><div style={{ fontFamily: 'monospace' }}>[d_c not disclosed]</div>
+                                <div>Q_t</div><div>Query feature for NoPE global attention</div><div style={{ fontFamily: 'monospace' }}>[H = 96; head width not disclosed]</div>
+                                <div>K_t / V_t</div><div>Reconstructed content key / value feature</div><div style={{ fontFamily: 'monospace' }}>[H = 96; head width not disclosed]</div>
                                 <div>õ_t</div><div>Global NoPE multi-head attention Softmax output</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                                 <div>y_t</div><div>Full-rank gating Sigmoid(W_g) combined with output projection W_o</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                               </>
@@ -966,11 +1049,14 @@ y_t = W_o * (Sigmoid(W_g * x_t) ⊙ õ_t)`}
                           {selectedLayer.hasMoe ? (
                             <MathRenderer 
                               color="#10B981"
-                              formula={`// Latent space projection (l = 3584) and QB routing
-z_t = W_↓ * x_t
-u_t = ∑_{i ∈ Top16} p_i * E_i(z_t)
-// SiTU-GLU activation inside experts to prevent explosion (|f(x)| ≤ 100)
-E_i(z) = W_up * (β₁ * tanh(z'_t / β₁) ⊙ Sigmoid(z'_t)) * W_gate`}
+                              formula={`// Shared path and latent routed path
+y_shared = E_1_shared(x_t) + E_2_shared(x_t)
+z_t = W_↓ * x_t   (z_t ∈ R^3584)
+s_t = Sigmoid(W_r * x_t); T_16 = Top16(s_t + b_t)
+p_i = s_i / Σ_{j∈T_16} s_j   (QB bias is not used in p_i)
+u_t = ∑_{i ∈ T_16} p_i * E_i(z_t)
+// Routed result returns to backbone width after normalization
+y_t = y_shared + W_↑ * RMSNorm(u_t)`}
                             />
                           ) : (
                             <MathRenderer 
@@ -1045,16 +1131,16 @@ y_ffn = y_shared + W_↑ * RMSNorm(u_t)`}
                         </div>
                       </div>
 
-                      {/* Step 4: Residual and AttnRes */}
+                      {/* Step 4: Block AttnRes aggregation */}
                       <div style={{ border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '6px', padding: '12px', background: 'rgba(16, 185, 129, 0.02)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.02rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', paddingBottom: '6px' }}>
-                          <span>4. Residual and AttnRes retrieval</span>
-                          <span style={{ color: '#10B981' }}>cross-block retrieval</span>
+                          <span>4. Block AttnRes aggregation</span>
+                          <span style={{ color: '#10B981' }}>one weighted source set</span>
                         </div>
                         <div>
                           <span style={{ fontSize: '1.15rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
                           <p style={{ fontSize: '1.15rem', color: '#E2E8F0', marginTop: '2px', lineHeight: '1.4' }}>
-                            Retrieval query linear projection (W_l) → RMSNorm normalization on block representations → dot-product Softmax retrieval weights → weighted residual aggregation → residual addition
+                            Retrieval query linear projection (W_l) → RMSNorm normalization on block representations → dot-product Softmax weights → one aggregation of b₀, earlier block summaries, and the current partial sum. Any outer residual wrapper is a separate operation.
                           </p>
                         </div>
                         <div>
@@ -1066,7 +1152,8 @@ V = [b_0, b_1, ..., b_n-1]ᵀ           (if i = 1)
 V = [b_0, b_1, ..., b_n-1, b_n^(i-1)]ᵀ (if i ≥ 2)
 // Retrieval weight calculation and accumulation (K, V generated from Block representations)
 α_k = Softmax(q_lᵀ * RMSNorm(k_b) / √d)
-h_l_next = SubLayer(h_l) + ∑ α_k * v_k + h_l`}
+                            r_l = ∑ α_k * v_k  // AttnRes aggregation
+x_(l+1) = x_l + F_l(r_l)  // separate outer residual wrapper`}
                           />
                         </div>
                         <div>
@@ -1080,7 +1167,7 @@ h_l_next = SubLayer(h_l) + ∑ α_k * v_k + h_l`}
                             <div>b_k</div><div>Boundary node feature of the k-th completed Block (b_0 is input embedding)</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                             <div>q_l</div><div>AttnRes retrieval query vector generated by current layer</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                             <div>α_k</div><div>Retrieval score for the k-th Block representation (Softmax weight)</div><div style={{ fontFamily: 'monospace' }}>Scalar [0, 1]</div>
-                            <div>h_l_next</div><div>Output state combining AttnRes retrieval and sequential sub-layers</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
+                            <div>r_l</div><div>Block AttnRes output after the weighted source aggregation</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                           </div>
                         </div>
                       </div>
@@ -1135,7 +1222,7 @@ h_l_next = SubLayer(h_l) + ∑ α_k * v_k + h_l`}
         <div className="card">
           <div className="card-title">📅 Progressive context-extension timeline</div>
           <p style={{ fontSize: '1.02rem', color: '#94A3B8', marginBottom: '15px' }}>
-            The report describes a four-stage context curriculum: 8K → 64K during pre-training, then 256K → 1M in cooldown. Select a stage for its published description.
+            The report describes a four-stage context curriculum: 8K → 64K during pre-training, then 256K → 1M in cooldown. This is a training strategy for gradually teaching longer dependencies; it is not four different model architectures. Select a stage to inspect what changes, why it is useful, and which memory terms grow with sequence length.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
@@ -1158,19 +1245,86 @@ h_l_next = SubLayer(h_l) + ∑ α_k * v_k + h_l`}
                   <div style={{ fontSize: '1.02rem', fontWeight: 'bold', color: isActive ? '#00F2FE' : '#E2E8F0' }}>
                     {stage.title}
                   </div>
-                  <div style={{ fontSize: '1.15rem', color: '#64748B', marginTop: '5px' }}>
-                    {idx === 0 ? "8K → " : idx === 1 ? "64K → " : idx === 2 ? "256K → " : "1M maximum"}
+                  <div style={{ fontSize: '1.15rem', color: '#64748B', marginTop: '5px', fontFamily: 'monospace' }}>
+                    {stage.tokens} · {stage.phase}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div style={{ background: '#02040a', padding: '12px', borderRadius: '6px', marginTop: '12px', fontSize: '1.02rem', borderLeft: '3px solid #00F2FE' }}>
-            <span style={{ color: '#FFF', fontWeight: 'bold' }}>{timelineStages[activeTimelineStage].title}: </span>
-            <p style={{ color: '#94A3B8', marginTop: '4px', lineHeight: '1.4' }}>
+          <div style={{ background: '#02040a', padding: '14px', borderRadius: '6px', marginTop: '12px', fontSize: '1.02rem', borderLeft: '3px solid #00F2FE' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <span style={{ color: '#FFF', fontWeight: 'bold' }}>{timelineStages[activeTimelineStage].title} · {timelineStages[activeTimelineStage].phase}</span>
+              <span style={{ color: '#00F2FE', fontFamily: 'monospace', fontWeight: 'bold' }}>max sequence: {timelineStages[activeTimelineStage].tokens}</span>
+            </div>
+            <p style={{ color: '#E2E8F0', marginTop: '6px', lineHeight: '1.45' }}>
               {timelineStages[activeTimelineStage].desc}
             </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', marginTop: '10px' }}>
+              <div style={{ padding: '10px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.07)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                <b style={{ color: '#38BDF8' }}>What is configured?</b>
+                <div style={{ color: '#94A3B8', marginTop: '5px', lineHeight: '1.45' }}>{timelineStages[activeTimelineStage].whatChanges}</div>
+              </div>
+              <div style={{ padding: '10px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.07)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <b style={{ color: '#10B981' }}>Why extend gradually?</b>
+                <div style={{ color: '#94A3B8', marginTop: '5px', lineHeight: '1.45' }}>{timelineStages[activeTimelineStage].why}</div>
+              </div>
+              <div style={{ padding: '10px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.07)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                <b style={{ color: '#F59E0B' }}>Memory implication</b>
+                <div style={{ color: '#94A3B8', marginTop: '5px', lineHeight: '1.45' }}>{timelineStages[activeTimelineStage].memory}</div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '12px', padding: '10px', borderRadius: '6px', background: '#0B0F19', border: '1px solid rgba(56, 189, 248, 0.2)', overflowX: 'auto' }}>
+              <div style={{ color: '#38BDF8', fontWeight: 'bold', marginBottom: '7px' }}>KV-cache record count across the curriculum</div>
+              <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', fontSize: '0.9rem', color: '#CBD5E1' }}>
+                <thead>
+                  <tr style={{ color: '#94A3B8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <th style={{ textAlign: 'left', padding: '5px' }}>Stage</th>
+                    <th style={{ textAlign: 'right', padding: '5px' }}>Tokens N</th>
+                    <th style={{ textAlign: 'right', padding: '5px' }}>MLA latent KV records</th>
+                    <th style={{ textAlign: 'right', padding: '5px' }}>Relative to 8K</th>
+                    <th style={{ textAlign: 'right', padding: '5px' }}>KDA recurrent state</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {timelineStages.map((stage, idx) => {
+                    const relativeCacheRecords = stage.tokenCount / timelineStages[0].tokenCount;
+                    return (
+                      <tr key={stage.title} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx === activeTimelineStage ? 'rgba(56, 189, 248, 0.07)' : 'transparent' }}>
+                        <td style={{ padding: '5px', color: idx === activeTimelineStage ? '#38BDF8' : '#E2E8F0', fontWeight: idx === activeTimelineStage ? 'bold' : 'normal' }}>{stage.title}</td>
+                        <td style={{ padding: '5px', textAlign: 'right', fontFamily: 'monospace' }}>{stage.tokenCount.toLocaleString()}</td>
+                        <td style={{ padding: '5px', textAlign: 'right', fontFamily: 'monospace' }}>N × 24 × d_c</td>
+                        <td style={{ padding: '5px', textAlign: 'right', color: '#F59E0B', fontFamily: 'monospace' }}>{relativeCacheRecords.toFixed(1)}×</td>
+                        <td style={{ padding: '5px', textAlign: 'right', color: '#10B981', fontFamily: 'monospace' }}>69 × d_k × d_v</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ color: '#94A3B8', marginTop: '8px', lineHeight: '1.45' }}>
+                Counting model: for the 24 MLA layers, one logical latent KV record is retained per token, so <span style={{ color: '#E2E8F0', fontFamily: 'monospace' }}>C_MLA(N) = N × 24 × d_c</span>; K3 does not disclose <span style={{ fontFamily: 'monospace' }}>d_c</span>. The 69 KDA layers keep fixed-shape recurrent state matrices, so their state count is approximately <span style={{ color: '#E2E8F0', fontFamily: 'monospace' }}>C_KDA = 69 × d_k × d_v</span>, independent of N. For a conventional full K/V cache, the comparable logical count is <span style={{ color: '#E2E8F0', fontFamily: 'monospace' }}>C_fullKV(N) = N × L × 2 × H × d_h</span>, which also doubles whenever N doubles. These are logical record counts, not byte estimates and not total inference memory.
+              </div>
+            </div>
+
+            <div style={{ marginTop: '12px', padding: '10px', borderRadius: '6px', background: '#0B0F19', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8', fontSize: '0.9rem', marginBottom: '6px' }}>
+                <span>Illustrative O(N) KV-cache record term</span>
+                <span style={{ color: '#F59E0B', fontFamily: 'monospace' }}>{(timelineStages[activeTimelineStage].tokenCount / timelineStages[0].tokenCount).toFixed(1)}× of 8K reference</span>
+              </div>
+              <div style={{ height: '12px', background: '#1E293B', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, Math.max(4, Math.log2(timelineStages[activeTimelineStage].tokenCount / timelineStages[0].tokenCount + 1) / 7 * 100))}%`, height: '100%', background: 'linear-gradient(90deg, #F59E0B, #EF4444)', transition: 'width 0.3s ease' }} />
+              </div>
+              <small style={{ display: 'block', color: '#64748B', marginTop: '6px', lineHeight: '1.45' }}>
+                This bar shows only relative sequence scaling, not total GPU memory. Standard per-token KV terms and MLA latent KV cache grow with N; KDA’s recurrent state term stays fixed in shape. Weights do not grow merely because the context window is longer, while training activations and runtime workspace depend on implementation.
+              </small>
+            </div>
+
+            <div style={{ marginTop: '10px', color: '#64748B', fontSize: '0.9rem', lineHeight: '1.45' }}>
+              Evidence boundary: the report publishes the four context stages and their curriculum order, but does not publish exact per-stage batch sizes, step counts, data mixture, or parallelism configuration. Those details should not be inferred from this timeline.
+            </div>
           </div>
         </div>
 

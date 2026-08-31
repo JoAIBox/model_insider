@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Pipeline Steps for Multimodal Token Alignment & End-to-End Compute Graph
+// Pipeline steps for the multimodal token alignment teaching graph.
 const pipelineSteps = [
-  { id: 0, title: "1. 文本 BPE 分词与向量查表", desc: "文本字符串 ➔ BPE 划分为 Token ID ➔ W_emb[ID] 查表生成 7,168 维文本向量", output: "x_text ∈ ℝ^7,168", type: "text" },
-  { id: 1, title: "2. 图像 14×14 切片滑窗扫描", desc: "28×28 图像划分为 4 个 14×14×3 (588d) 像素切片 Patch", output: "Patch x_p ∈ ℝ^(4 × 588px)", type: "vision" },
-  { id: 2, title: "3. 512 卷积核点积特征提取", desc: "512 个 14×14×3 卷积核覆盖点乘 ➔ 抽取 4 个 512 维特征向量", output: "f_vit ∈ ℝ^(4 × 512d)", type: "vision" },
-  { id: 3, title: "4. 2×2 Pixel Shuffle 空间打包", desc: "4 个 512d 向量空间打平融合 ➔ 打包为 1 个 2,048 维图像 Token (压缩75%)", output: "v_2048 ∈ ℝ^2,048 (1 Token)", type: "vision" },
-  { id: 4, title: "5. W_proj 矩阵升维对齐", desc: "W_proj [7168×2048] 矩阵乘法 ➔ 升维对齐至 7,168 维统一高维空间", output: "x_vis ∈ ℝ^7,168", type: "vision" },
-  { id: 5, title: "6. 前向交错序列物理拼接", desc: "按 [Prefix文本 ➔ 图像Token ➔ Suffix文本] 顺序拼装为 Stream X ➔ 送入 93 层 Backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
-  { id: 6, title: "7. 单步 160K 词表采样与自回归", desc: "Backbone 输出 h_t ➔ W_unembed [160,000×7168] 词表打分 ➔ 采样 1 个 Next Token ↺ 写回 Context", output: "1 Next Token (t=N+1)", type: "decoder" }
+  { id: 0, title: "1. Text BPE tokenization and embedding lookup", desc: "Text string ➔ BPE token IDs ➔ W_emb[ID] lookup to produce a 7,168-d text vector", output: "x_text ∈ ℝ^7,168", type: "text" },
+  { id: 1, title: "2. Image patchification at 14×14", desc: "Teaching geometry: a 28×28 image ➔ four 14×14×3 (588-value) RGB patches. K3 confirms the 14×14 patch size; this four-patch example is illustrative.", output: "Patch x_p ∈ ℝ^(4 × 588 values) (teaching example)", type: "vision" },
+  { id: 2, title: "3. 512-filter dot-product feature extraction (teaching example)", desc: "Teaching implementation: 512 separate 14×14×3 filters produce four 512-d feature vectors. K3 identifies MoonViT-V2 but does not disclose this 512-channel Conv2d stage.", output: "f_vit ∈ ℝ^(4 × 512) (teaching example)", type: "vision" },
+  { id: 3, title: "4. 2×2 Pixel Shuffle token packing", desc: "Teaching geometry: four 512-d vectors are flattened and packed into one 2,048-value visual token, reducing this example’s token count by 75%. K3 confirms 2×2 Pixel Shuffle and a 4× reduction; these widths are illustrative.", output: "v_2048 ∈ ℝ^2,048 (1 token; teaching example)", type: "vision" },
+  { id: 4, title: "5. W_proj projection into the shared space (teaching dimensions)", desc: "Teaching matrix view: W_proj [7,168×2,048] maps the packed visual vector into the 7,168-d shared backbone space. K3 confirms a lightweight MLP projector and the 7,168-d target, not this exact matrix shape.", output: "x_vis ∈ ℝ^7,168", type: "vision" },
+  { id: 5, title: "6. Interleaved sequence assembly", desc: "[prefix text ➔ visual token ➔ suffix text] is assembled into Stream X and sent through the 93-layer backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
+  { id: 6, title: "7. 160K-vocabulary autoregressive decoding", desc: "Backbone output h_t ➔ W_unembed [160,000×7,168] vocabulary logits ➔ sample one next token ↺ append it to the context", output: "1 next token (t=N+1)", type: "decoder" }
 ];
 
 export const MultimodalTokenSimulator: React.FC = () => {
@@ -73,14 +73,14 @@ export const MultimodalTokenSimulator: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.8rem' }}>🌟</span>
             <h2 style={{ fontSize: '1.6rem', color: '#FFF', margin: 0, fontWeight: 'bold' }}>
-              Layer 0 多模态 Token 全流程计算拓扑与自回归生成先后控制台
+              Layer 0 multimodal token flow and autoregressive generation console
             </h2>
             <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid #38BDF8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
               Multimodal Tokenizer Simulator (§2.1)
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            真实展现连续图像如何经过 2×2 Pixel Shuffle 空间打包为 1 个视觉 Token，以及自回归解码如何单次从 160K 词表采样 1 个 Token 回流追加
+            An interactive teaching view of 14×14 patchification, 2×2 Pixel Shuffle token-count reduction, visual projection into the 7,168-d backbone space, and one-token-at-a-time autoregressive decoding.
           </p>
         </div>
 
@@ -99,7 +99,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            1. 动态全拓扑与自回归 (Compute Graph)
+            1. Dynamic compute graph and autoregression
           </button>
           <button
             onClick={() => setActiveTab('patchEncoder')}
@@ -114,7 +114,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            2. 512 卷积核点积计算
+            2. Patch feature extraction (teaching view)
           </button>
           <button
             onClick={() => setActiveTab('pixelShuffle')}
@@ -129,7 +129,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            3. 2×2 Pixel Shuffle (2,048d)
+            3. 2×2 Pixel Shuffle token packing
           </button>
           <button
             onClick={() => setActiveTab('latentSpace')}
@@ -144,7 +144,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            4. 7,168维 统一高维潜空间
+            4. 7,168-d shared backbone space
           </button>
           <button
             onClick={() => setActiveTab('decoder')}
@@ -159,7 +159,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            5. 逆向重构还原验证
+            5. Reconstruction teaching view
           </button>
         </div>
       </div>
@@ -174,7 +174,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
             {/* Multimodal Prompt Inputs */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>前缀文本 Prompt:</label>
+                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Prefix prompt:</label>
                 <input
                   type="text"
                   value={prefixText}
@@ -184,12 +184,12 @@ export const MultimodalTokenSimulator: React.FC = () => {
               </div>
 
               <div style={{ background: 'rgba(167, 139, 250, 0.15)', border: '1px solid #A78BFA', padding: '6px 12px', borderRadius: '6px', color: '#A78BFA', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>🖼️ [28×28 图像输入]</span>
-                <span style={{ fontSize: '0.75rem', background: '#0F172A', color: '#10B981', padding: '2px 6px', borderRadius: '4px' }}>打包为 1 Visual Token</span>
+                <span>🖼️ [teaching image geometry]</span>
+                <span style={{ fontSize: '0.75rem', background: '#0F172A', color: '#10B981', padding: '2px 6px', borderRadius: '4px' }}>2×2 packing: 4 ➔ 1 visual-token group</span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>后缀文本 Prompt:</label>
+                <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Suffix prompt:</label>
                 <input
                   type="text"
                   value={suffixText}
@@ -202,7 +202,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
             {/* Autoregressive Step Control Button */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#0B0F19', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
               <span style={{ fontSize: '0.85rem', color: '#F59E0B', fontWeight: 'bold' }}>
-                ⏱️ 自回归生成步: {genStep === 0 ? 'Prefill 预热' : `t = N+${genStep}`}
+                ⏱️ Autoregressive step: {genStep === 0 ? 'Prefill' : `t = N+${genStep}`}
               </span>
               <button
                 onClick={() => setGenStep((prev) => (prev < vocabSampleTokens.length ? prev + 1 : 0))}
@@ -217,7 +217,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                {genStep < vocabSampleTokens.length ? `↻ 预测 160K 词表下一个 Token (t=N+${genStep + 1})` : '🔄 重置 Context'}
+                {genStep < vocabSampleTokens.length ? `↻ Predict next token from the 160K vocabulary (t=N+${genStep + 1})` : '🔄 Reset context'}
               </button>
             </div>
 
@@ -236,7 +236,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                💡 类比模式
+                💡 Analogy mode
               </button>
               <button
                 onClick={() => setViewMode('math')}
@@ -251,21 +251,21 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                📐 学术模式
+                📐 Technical mode
               </button>
             </div>
 
           </div>
 
           {/* 3-Panel Main Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px' }}>
+          <div className="multimodal-main-grid" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px' }}>
             
             {/* PANEL 1: END-TO-END COMPUTATION GRAPH & AUTOREGRESSIVE ENGINE SVG */}
             <div style={{ background: '#070913', padding: '20px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.1rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                  🎬 区域一：多模态 Token 全流程计算与 160K 词表自回归拓扑图
+                  🎬 Panel 1: multimodal token flow and 160K-vocabulary autoregressive graph
                 </h3>
                 <span style={{ fontSize: '0.85rem', background: '#0F172A', color: '#38BDF8', padding: '3px 10px', borderRadius: '4px', fontFamily: 'monospace' }}>
                   Step {stepIdx + 1}/{pipelineSteps.length}: {currentStep.title}
@@ -296,6 +296,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   </div>
                 ))}
               </div>
+              <small style={{ color: '#64748B', lineHeight: '1.4' }}>Swipe or drag this step strip horizontally on a narrow screen; the active step below is enlarged in the explanation panel.</small>
 
               {/* Step Controls */}
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#0F172A', padding: '8px 12px', borderRadius: '6px' }}>
@@ -303,20 +304,26 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   onClick={() => { setIsPlaying(false); setStepIdx((prev) => (prev > 0 ? prev - 1 : pipelineSteps.length - 1)); }}
                   style={{ background: '#1E293B', color: '#FFF', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                 >
-                  ⏪ 上一步
+                  ⏪ Previous step
                 </button>
                 <button
                   onClick={() => setIsPlaying(!isPlaying)}
                   style={{ background: isPlaying ? '#EF4444' : '#10B981', color: '#000', border: 'none', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                 >
-                  {isPlaying ? '⏸️ 暂停动画' : '▶️ 自动播放全流程'}
+                  {isPlaying ? '⏸️ Pause animation' : '▶️ Play full flow'}
                 </button>
                 <button
                   onClick={() => { setIsPlaying(false); setStepIdx((prev) => (prev + 1) % pipelineSteps.length); }}
                   style={{ background: '#1E293B', color: '#FFF', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                 >
-                  下一步 ⏩
+                  Next step ⏩
                 </button>
+              </div>
+
+              <div aria-live="polite" style={{ padding: '10px 12px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                <div style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>Current focus: {currentStep.title}</div>
+                <div style={{ color: '#E2E8F0', marginTop: '4px', lineHeight: '1.45' }}>{currentStep.desc}</div>
+                <div style={{ color: '#A78BFA', marginTop: '4px', fontFamily: 'monospace', fontSize: '0.9rem' }}>Output: {currentStep.output}</div>
               </div>
 
               {/* WIDESCREEN END-TO-END COMPUTATION & AUTOREGRESSIVE LOOPBACK GRAPH SVG */}
@@ -352,27 +359,27 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   {/* 1. TEXT PREFIX BRANCH: String -> Token ID -> W_emb Lookup */}
                   <g opacity={stepIdx === 0 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
                     <rect x="20" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 0 ? 3 : 1.5} />
-                    <text x="100" y="44" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">1. 前缀文本 (Prefix)</text>
+                    <text x="100" y="44" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">1. Prefix text</text>
                     <text x="100" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{prefixText}"</text>
-                    <text x="100" y="80" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 查表</text>
+                    <text x="100" y="80" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] lookup</text>
                     <text x="100" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_prefix ∈ ℝ^(T1×7168)</text>
                   </g>
 
-                  {/* 2. VISION BRANCH: 28x28 Image Patch -> Conv2d 512 -> 2x2 Pixel Shuffle -> W_proj */}
+                  {/* 2. VISION BRANCH: patchify -> MoonViT-V2 -> Pixel Shuffle -> projector */}
                   <g opacity={stepIdx >= 1 && stepIdx <= 4 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
                     <rect x="200" y="20" width="370" height="95" rx="8" fill="#0F172A" stroke="#A78BFA" strokeWidth={stepIdx >= 1 && stepIdx <= 4 ? 3 : 1.5} />
-                    <text x="385" y="42" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">2. 图像分支 (28×28 图像块)</text>
-                    <text x="385" y="62" fill="#FFF" fontSize="10" textAnchor="middle">4×(14×14×3) ➔ 512 卷积核 ➔ 2×2 Pixel Shuffle (2,048d)</text>
-                    <text x="385" y="80" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">W_proj [7168×2048] 升维投影</text>
-                    <text x="385" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">打包生成 仅 1 个图像 Token (x_vis ∈ ℝ^7,168)</text>
+                    <text x="385" y="42" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">2. Vision branch (MoonViT-V2)</text>
+                    <text x="385" y="62" fill="#FFF" fontSize="10" textAnchor="middle">14×14 patches ➔ visual features ➔ 2×2 Pixel Shuffle (tokens ÷ 4)</text>
+                    <text x="385" y="80" fill="#10B981" fontSize="10" fontFamily="monospace" textAnchor="middle">projector ➔ 7,168-d shared space</text>
+                    <text x="385" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_vis ∈ ℝ^7,168 (intermediate widths undisclosed)</text>
                   </g>
 
                   {/* 3. TEXT SUFFIX BRANCH: String -> Token ID -> W_emb Lookup */}
                   <g opacity={stepIdx === 0 || stepIdx === 5 ? 1 : 0.5} style={{ transition: 'all 0.3s' }}>
                     <rect x="590" y="20" width="160" height="95" rx="8" fill="#0F172A" stroke="#38BDF8" strokeWidth={stepIdx === 5 ? 3 : 1.5} />
-                    <text x="670" y="44" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">3. 后缀文本 (Suffix)</text>
+                    <text x="670" y="44" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">3. Suffix text</text>
                     <text x="670" y="64" fill="#FFF" fontSize="11" textAnchor="middle">"{suffixText}"</text>
-                    <text x="670" y="80" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] 查表</text>
+                    <text x="670" y="80" fill="#38BDF8" fontSize="10" fontFamily="monospace" textAnchor="middle">W_emb[ID] lookup</text>
                     <text x="670" y="96" fill="#FFF" fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle">x_suffix ∈ ℝ^(T2×7168)</text>
                   </g>
 
@@ -387,18 +394,18 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <line x1="670" y1="115" x2="670" y2="185" stroke="#38BDF8" strokeWidth="2" />
                   <line x1="670" y1="185" x2="600" y2="185" stroke="#38BDF8" strokeWidth="2" markerEnd="url(#arrow-blue)" />
 
-                  {/* 6. Interleaved Physical Sequence Bar [Prefix文本 ➔ 1个图像Token ➔ Suffix文本] */}
+                  {/* 6. Interleaved physical sequence bar [prefix ➔ visual tokens ➔ suffix] */}
                   <g opacity={stepIdx === 5 || stepIdx === 0 || stepIdx === 4 ? 1 : 0.75} style={{ transition: 'all 0.3s' }}>
                     <rect x="120" y="195" width="620" height="95" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="#10B981" strokeWidth={stepIdx === 5 ? 3 : 2} />
                     <text x="430" y="218" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">
-                      物理序列拼接 Stream X = [x_prefix, x_vis, x_suffix] ➔ 93层 Backbone 处理
+                      Stream X = [x_prefix, x_vis, x_suffix] ➔ 93-layer backbone
                     </text>
 
                     {/* Sequential Order Visual Blocks (Strictly: Prefix Text -> 1 Image Token -> Suffix Text -> Single Next Token y_t) */}
                     <g transform="translate(135, 235)">
                       {/* Block 1: Prefix Text */}
                       <rect x="0" y="0" width="130" height="32" rx="4" fill="#38BDF8" />
-                      <text x="65" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1. 前缀文本 (Prefix)</text>
+                      <text x="65" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">1. Prefix text</text>
                       <text x="65" y="27" fill="#000" fontSize="8" textAnchor="middle">"{prefixText}"</text>
 
                       {/* Arrow */}
@@ -406,15 +413,15 @@ export const MultimodalTokenSimulator: React.FC = () => {
 
                       {/* Block 2: 1 Image Token */}
                       <rect x="154" y="0" width="170" height="32" rx="4" fill="#10B981" />
-                      <text x="239" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">2. 图像 Token (1个 28×28)</text>
-                      <text x="239" y="27" fill="#000" fontSize="8" textAnchor="middle">Pixel Shuffle 压缩率 75%</text>
+                      <text x="239" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">2. Visual-token group</text>
+                      <text x="239" y="27" fill="#000" fontSize="8" textAnchor="middle">Pixel Shuffle: token count ÷ 4</text>
 
                       {/* Arrow */}
                       <text x="330" y="20" fill="#94A3B8" fontSize="12">➔</text>
 
                       {/* Block 3: Suffix Text */}
                       <rect x="346" y="0" width="130" height="32" rx="4" fill="#38BDF8" />
-                      <text x="411" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">3. 后缀文本 (Suffix)</text>
+                      <text x="411" y="16" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">3. Suffix text</text>
                       <text x="411" y="27" fill="#000" fontSize="8" textAnchor="middle">"{suffixText}"</text>
 
                       {/* Autoregressive Appended Single Token y_t (1 single next token per step) */}
@@ -424,7 +431,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                           <g transform="translate(496, 0)">
                             <rect x="0" y="0" width="90" height="32" rx="4" fill="#F59E0B" />
                             <text x="45" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Next Token y_t</text>
-                            <text x="45" y="27" fill="#000" fontSize="8" fontFamily="monospace" textAnchor="middle">160K 采样单 Token</text>
+                            <text x="45" y="27" fill="#000" fontSize="8" fontFamily="monospace" textAnchor="middle">one token from 160K</text>
                           </g>
                         </>
                       )}
@@ -438,23 +445,23 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <g opacity={stepIdx === 6 || genStep > 0 ? 1 : 0.6} style={{ transition: 'all 0.3s' }}>
                     <rect x="60" y="360" width="740" height="100" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
                     <text x="430" y="384" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
-                      7. 单步 160K 词表采样解码与自回归追加 (160K Vocabulary Sampling & Write-Back)
+                      7. One-step 160K-vocabulary decoding and autoregressive append
                     </text>
 
                     {/* Left Decoder Branch: 160K Vocabulary Text Decoding */}
                     <g transform="translate(80, 396)">
                       <rect x="0" y="0" width="310" height="52" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
-                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 W_unembed [160,000×7,168] 词表打分</text>
+                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 W_unembed [160,000×7,168] vocabulary logits</text>
                       <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">
-                        {genStep === 0 ? 'h_t ➔ 160K Logits ➔ Softmax ➔ 采样 1 个 Next Token' : `采样输出 1 个 Token (t=N+${genStep}): ${vocabSampleTokens[genStep - 1]?.token}`}
+                        {genStep === 0 ? 'h_t ➔ 160K logits ➔ Softmax ➔ sample 1 next token' : `sampled token (t=N+${genStep}): ${vocabSampleTokens[genStep - 1]?.token}`}
                       </text>
                     </g>
 
                     {/* Right Decoder Branch: Image Reconstruction */}
                     <g transform="translate(420, 396)">
                       <rect x="0" y="0" width="360" height="52" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
-                      <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ 图像还原: Un-shuffle ➔ ConvTranspose2d</text>
-                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">1个v_2048 ➔ 4×512d ➔ 4×588px ➔ 28×28 像素重构</text>
+                      <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ Reconstruction teaching view</text>
+                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">not a documented K3 inverse decoder</text>
                     </g>
                   </g>
 
@@ -469,16 +476,16 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   />
                   <rect x="25" y="350" width="135" height="26" rx="4" fill="#F59E0B" />
                   <text x="92" y="367" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">
-                    ↺ 单 Token 回流追加 (Write Back)
+                    ↺ append one sampled token to the context
                   </text>
                 </svg>
 
                 <div style={{ background: '#0F172A', padding: '10px 14px', borderRadius: '6px', fontSize: '0.88rem', color: '#94A3B8', marginTop: '6px' }}>
-                  💡 <b>严格符合 Kimi K3 架构规范的 Token 数量与采样逻辑:</b>
+                  💡 <b>Report-grounded facts and explicit teaching assumptions:</b>
                   <br />
-                  1. <b>图像分支 Token 压缩率</b>：2×2 Pixel Shuffle 将 4 个 14×14 ViT 512d 特征块打包为 <b>仅 1 个 2,048d 图像 Token</b>（升维后为 1 个 7,168d Token），使图像视觉 Token 数量锐减 75%！
+                  1. <b>Visual-token count</b>: the report confirms 14×14 patchification and 2×2 Pixel Shuffle, which reduces the visual-token count by 4×. The 512-channel, 2,048-d, and 28×28 values in the detailed teaching panels are illustrative—not disclosed K3 parameters.
                   <br />
-                  2. <b>自回归解码单 Token 采样</b>：每次时间步 $t$，模型过 W_unembed 对 <b>160,000 (160K) 维词表</b>打分，<b>单次仅采样产生 1 个 Next Token</b>；该 Token 沿黄色回路写回 (Write Back) 上下文末尾，驱动下一步推演！
+                  2. <b>One-token autoregression</b>: at each decoding step, W_unembed scores the <b>160,000-token vocabulary</b>, one next token is selected, and that token is appended to the context for the next step.
                 </div>
               </div>
 
@@ -488,38 +495,38 @@ export const MultimodalTokenSimulator: React.FC = () => {
             <div style={{ background: '#070913', padding: '20px', borderRadius: '10px', border: '1px solid rgba(167, 139, 250, 0.2)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               <h3 style={{ fontSize: '1.1rem', color: '#A78BFA', margin: 0, fontWeight: 'bold' }}>
-                {viewMode === 'analogy' ? '💡 区域二：软件工程概念锚点 (Analogy Mode)' : '📐 区域二：动态学术公式与代码'}
+                {viewMode === 'analogy' ? '💡 Panel 2: software-engineering analogy' : '📐 Panel 2: technical formulas and code'}
               </h3>
 
               {viewMode === 'analogy' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   
                   <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #38BDF8' }}>
-                    <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>🔤 文本 Embedding：SQL 主键索引查表 (ID Lookup)</span>
+                    <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>🔤 Text embedding: SQL primary-key lookup</span>
                     <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      类似于数据库中通过字符串 ID 在预存词表中检索 7,168 维浮点数组，操作为硬查找与内存只读抽取。
+                      Like retrieving a pre-stored 7,168-d floating-point row by an ID: a discrete lookup, not a learned image transformation.
                     </p>
                   </div>
 
                   <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #A78BFA' }}>
-                    <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>🖼️ 图像 Projection：编解码重采样 (Resampling Codec)</span>
+                    <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>🖼️ Vision projection: learned feature mapping</span>
                     <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      类似于视频/图像编解码器的空间下采样与格式转换，将 2D 像素打碎、用 512 卷积核抽取特征、2×2 Shuffle 打平后再用 W_proj 空间升维对齐。
+                      The report-grounded path is patchification → MoonViT-V2 feature extraction → 2×2 Pixel Shuffle → a projector into the shared 7,168-d backbone space. The detailed 512-channel example is teaching-only.
                     </p>
                   </div>
 
                   <div style={{ background: '#0F172A', padding: '12px', borderRadius: '8px', border: '1px solid #F59E0B' }}>
-                    <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>↺ 自回归 Loopback：递归 Iterator 与 Queue 追加</span>
+                    <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>↺ Autoregressive loopback: iterator and queue append</span>
                     <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      类似于生成器模式 (Generator Iterator)。每次产生的返回值 y_t 被 `queue.append(y_t)` 追加到动态数组末尾，驱动下一轮循环。
+                      Like a generator iterator: each sampled y_t is appended with `queue.append(y_t)` and becomes input to the next decoding step.
                     </p>
                   </div>
 
                   {/* Strict Boundary Note */}
                   <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid #EF4444' }}>
-                    <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.9rem' }}>⚠️ 物理边界与严格区别（保障技术精准性）：</span>
+                    <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.9rem' }}>⚠️ Physical boundaries and important distinctions:</span>
                     <p style={{ color: '#CBD5E1', fontSize: '0.85rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-                      文本是<b>静态离散字典查表</b>；图像是<b>连续神经网络矩阵乘法高维投影 (x_vis = W_proj · v_2048)</b>。自回归生成是<b>逐步概率采样并迭代追加 KV Cache</b>。
+                      Text uses a <b>discrete embedding lookup</b>; vision uses a <b>continuous learned projection into the backbone space</b>; autoregression <b>selects one token per step and updates the context / cache</b>.
                     </p>
                   </div>
 
@@ -528,12 +535,12 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   
                   <div style={{ background: '#0F172A', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '6px' }}>// 前向与自回归生成全逻辑公式：</div>
+                    <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '6px' }}>// Forward path and autoregressive decoding:</div>
                     <div style={{ color: '#38BDF8', fontFamily: 'monospace', fontSize: '0.92rem' }}>
                       e_text = W_emb[token_id]  ∈ ℝ^(7,168)
                     </div>
                     <div style={{ color: '#10B981', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
-                      e_img = W_proj · PixelShuffle(Conv2d_512(x_patch))  ∈ ℝ^(7,168)
+                      e_img = Projector(PixelShuffle(MoonViT_V2(Patchify(image))))  ∈ ℝ^(7,168)
                     </div>
                     <div style={{ color: '#F59E0B', fontFamily: 'monospace', fontSize: '0.92rem', marginTop: '4px' }}>
                       y_(t+1) = Softmax(W_unembed · h_t), Append y_(t+1) to Context
@@ -541,12 +548,12 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   </div>
 
                   <div style={{ background: '#0B0F19', padding: '12px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#E2E8F0', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch 前向与自回归 Loopback 实现:</div>
+                    <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch-style forward path and autoregressive loopback:</div>
                     <div style={{ color: stepIdx === 0 ? '#38BDF8' : '#64748B' }}>x_txt = self.w_emb(text_ids)  # [B, T_txt, 7168]</div>
-                    <div style={{ color: stepIdx === 2 ? '#10B981' : '#64748B' }}>f_vit = self.conv2d_512(patches)  # [B, N, 512]</div>
-                    <div style={{ color: stepIdx === 3 ? '#F59E0B' : '#64748B' }}>v_2048 = pixel_shuffle(f_vit, r=2)  # [B, N/4, 2048]</div>
-                    <div style={{ color: stepIdx === 4 ? '#10B981' : '#64748B' }}>x_img = self.w_proj(v_2048)  # [B, N/4, 7168]</div>
-                    <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}># Autoregressive Loopback:</div>
+                    <div style={{ color: stepIdx === 2 ? '#10B981' : '#64748B' }}>f_vit = self.moonvit_v2(patches)  # visual width undisclosed</div>
+                    <div style={{ color: stepIdx === 3 ? '#F59E0B' : '#64748B' }}>v = pixel_shuffle(f_vit, r=2)  # visual tokens: N/4</div>
+                    <div style={{ color: stepIdx === 4 ? '#10B981' : '#64748B' }}>x_img = self.projector(v)  # [B, N/4, 7168]</div>
+                    <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}># Autoregressive loopback:</div>
                     <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}>y_next = torch.argmax(self.w_unembed(h_t))</div>
                     <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}>seq_stream.append(self.w_emb(y_next))</div>
                   </div>
@@ -563,11 +570,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <h3 style={{ fontSize: '1.1rem', color: '#10B981', margin: 0, fontWeight: 'bold' }}>
-                📊 区域三：为什么需要 2×2 Pixel Shuffle 空间下采样？(Ablation Sandbox)
+                📊 Panel 3: why use 2×2 Pixel Shuffle? (ablation sandbox)
               </h3>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#0F172A', padding: '4px 12px', borderRadius: '6px' }}>
-                <span style={{ fontSize: '0.85rem', color: '#FFF' }}>模拟图像分辨率:</span>
+                <span style={{ fontSize: '0.85rem', color: '#FFF' }}>Teaching image resolution:</span>
                 <input
                   type="range"
                   min="28"
@@ -579,6 +586,9 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 />
                 <span style={{ color: '#10B981', fontFamily: 'monospace', fontWeight: 'bold' }}>{imgRes}×{imgRes} px</span>
               </div>
+              <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '6px', border: '1px solid rgba(167, 139, 250, 0.45)', background: 'rgba(167, 139, 250, 0.1)', color: '#DDD6FE', fontSize: '0.82rem', lineHeight: '1.45' }}>
+                <b>Scale note:</b> this is a teaching canvas limited to 224 px. The K3 report describes inputs up to <b>3,584×3,584 px</b>; with 14×14 patches and 2×2 Pixel Shuffle, one image goes from 65,536 patch tokens to 16,384 visual tokens before other context overhead.
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
@@ -586,11 +596,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
               {/* Without Pixel Shuffle */}
               <div style={{ background: '#0F172A', padding: '14px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.95rem' }}>传统 ViT (无 Pixel Shuffle)</span>
-                  <span style={{ color: '#EF4444', fontFamily: 'monospace', fontWeight: 'bold' }}>{(imgRes / 14) ** 2} Vision Tokens</span>
+                  <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.95rem' }}>Patch tokens (without 2×2 packing)</span>
+                  <span style={{ color: '#EF4444', fontFamily: 'monospace', fontWeight: 'bold' }}>{(imgRes / 14) ** 2} visual tokens</span>
                 </div>
                 <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '8px 0 0 0', lineHeight: '1.4' }}>
-                  每个 14×14 像素 Patch 独立作为一个 Token，包含太多空间冗余。导致 93 层 Backbone 的 Attention 计算开销暴增 16 倍！
+                  Each 14×14 patch remains a separate token in this comparison. Attention cost scales quadratically with sequence length; the exact end-to-end multiplier depends on the surrounding sequence and implementation.
                 </p>
               </div>
 
@@ -598,10 +608,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
               <div style={{ background: '#0F172A', padding: '14px', borderRadius: '8px', border: '1px solid #10B981' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>Kimi K3 (2×2 Pixel Shuffle)</span>
-                  <span style={{ color: '#10B981', fontFamily: 'monospace', fontWeight: 'bold' }}>{((imgRes / 14) ** 2) / 4} Vision Tokens (压缩 75%!)</span>
+                  <span style={{ color: '#10B981', fontFamily: 'monospace', fontWeight: 'bold' }}>{((imgRes / 14) ** 2) / 4} visual tokens (count ÷ 4)</span>
                 </div>
                 <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '8px 0 0 0', lineHeight: '1.4' }}>
-                  将 2×2 邻近的 4 个 Patch 融合成 1 个 2,048 维 Token，使 Token 数量减少 75%，完美兼顾后续 Backbone 运行效率与像素细节！
+                  The report confirms that 2×2 Pixel Shuffle reduces visual-token count by 4×. The intermediate channel width and any exact quality tradeoff are not disclosed here, so this sandbox illustrates the count relationship only.
                 </p>
               </div>
 
@@ -612,22 +622,22 @@ export const MultimodalTokenSimulator: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: 588d -> 512d PATCH ENCODER DETAILED SIMULATOR */}
+      {/* TAB 2: PATCH FEATURE EXTRACTION TEACHING SIMULATOR */}
       {activeTab === 'patchEncoder' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#A78BFA', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              🔬 14×14×3 (588d 像素) 如何转换为 512d 深度向量？
+              🔬 Teaching example: how can a 14×14×3 (588-value) patch become a visual feature vector?
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              每个 $14 \times 14$ 像素的切片包含 $14 \times 14 \times 3 = 588$ 个 RGB 原始数值。在工程上，通常使用 <b>512 个不同的 $14 \times 14 \times 3$ 卷积核</b>（即 `Conv2d(3, 512, kernel_size=14, stride=14)`）覆盖整个切片进行一次性点乘运算。
+              A 14×14 RGB patch contains 14×14×3 = 588 input values. This panel keeps the original filter-by-filter interaction as a <b>teaching example</b>. K3’s report identifies MoonViT-V2 and the 14×14 patch size, but does not publish a 512-channel Conv2d stage, so 512 must not be read as a K3 parameter.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px' }}>
             {/* Left: 14x14 Patch RGB Visualizer */}
             <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>1. 原始 14×14 像素切片 (588d)</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>1. Raw 14×14 RGB patch (588 input values)</span>
               
               <div style={{ width: '220px', height: '220px', background: '#000', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(14, 1fr)', gap: '1px', padding: '4px', border: '1px solid #334155' }}>
                 {Array.from({ length: 196 }).map((_, idx) => {
@@ -647,16 +657,16 @@ export const MultimodalTokenSimulator: React.FC = () => {
               </div>
 
               <div style={{ fontSize: '0.95rem', color: '#94A3B8', textAlign: 'center' }}>
-                像素点数: 196 × 3 通道 = <b>588 原始浮点数值</b>
+                Pixel values: 196 × 3 channels = <b>588 input values</b>
               </div>
             </div>
 
             {/* Right: 512 Filter Selector & Output Inspection */}
             <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>2. 512 个不同权重的 14×14×3 卷积核提取器</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>2. Example filter bank (512 filters; teaching-only)</span>
               
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.95rem', color: '#94A3B8' }}>选择卷积核编号 (Filter #):</span>
+                <span style={{ fontSize: '0.95rem', color: '#94A3B8' }}>Select filter index:</span>
                 <input
                   type="range"
                   min="0"
@@ -666,32 +676,32 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   style={{ width: '200px' }}
                 />
                 <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '1rem', fontFamily: 'monospace' }}>
-                  Filter #{selectedFilterIdx + 1} / 512
+                  Filter #{selectedFilterIdx + 1} / 512 (illustrative)
                 </span>
               </div>
 
               {/* Active Filter Details */}
               <div style={{ background: '#0F172A', padding: '14px', borderRadius: '6px', border: '1px solid rgba(167, 139, 250, 0.2)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem' }}>
-                  <span style={{ color: '#FFF', fontWeight: 'bold' }}>卷积核功能特性:</span>
+                  <span style={{ color: '#FFF', fontWeight: 'bold' }}>Example filter role:</span>
                   <span style={{ color: '#38BDF8' }}>
-                    {selectedFilterIdx % 4 === 0 && '🔍 垂直边缘检测器 (Vertical Edge Filter)'}
-                    {selectedFilterIdx % 4 === 1 && '🎨 蓝绿色彩对比度检测器 (Color Contrast Filter)'}
-                    {selectedFilterIdx % 4 === 2 && '纹理粗糙度特征器 (Texture Gradient Filter)'}
-                    {selectedFilterIdx % 4 === 3 && '☀️ 高频明暗梯度提取器 (Brightness Gradient)'}
+                    {selectedFilterIdx % 4 === 0 && '🔍 vertical-edge detector'}
+                    {selectedFilterIdx % 4 === 1 && '🎨 blue-green contrast detector'}
+                    {selectedFilterIdx % 4 === 2 && 'texture-gradient detector'}
+                    {selectedFilterIdx % 4 === 3 && '☀️ brightness-gradient detector'}
                   </span>
                 </div>
                 <div style={{ fontSize: '0.95rem', color: '#94A3B8' }}>
-                  每个卷积核带有 <b>14×14×3 = 588 个专属训练权重</b>。覆盖切片一次性乘加，输出 <b>1 个特征标量值</b>。
+                  Each example filter has <b>14×14×3 = 588 learned weights</b>. One dot product produces <b>one feature scalar</b> in this teaching model.
                 </div>
                 <div style={{ fontSize: '1.1rem', color: '#A78BFA', fontWeight: 'bold', marginTop: '4px', fontFamily: 'monospace' }}>
-                  计算输出值 Output [{selectedFilterIdx}] = {(Math.sin(selectedFilterIdx * 0.4) * 0.85 + 0.12).toFixed(4)}
+                  Example output value [{selectedFilterIdx}] = {(Math.sin(selectedFilterIdx * 0.4) * 0.85 + 0.12).toFixed(4)}
                 </div>
               </div>
 
               {/* Resulting 512d Vector Bar */}
               <div style={{ marginTop: '8px' }}>
-                <span style={{ fontSize: '1rem', color: '#FFF', fontWeight: 'bold' }}>3. 拼合产生的 512 维 Patch 向量 (v_t ∈ ℝ^512)</span>
+                <span style={{ fontSize: '1rem', color: '#FFF', fontWeight: 'bold' }}>3. Example patch feature vector (v_t ∈ ℝ^512)</span>
                 <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', marginTop: '8px' }}>
                   {Array.from({ length: 32 }).map((_, idx) => {
                     const isActive = Math.abs(idx * 16 - selectedFilterIdx) < 16;
@@ -727,17 +737,17 @@ export const MultimodalTokenSimulator: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#10B981', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              🧩 2×2 Pixel Shuffle 空间重组（4 个 512d 合并为 1 个 2,048d）
+              🧩 2×2 Pixel Shuffle token packing (count relationship; widths are illustrative)
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              直接把 512 维向量送入 LLM 序列太长（开销大）。通过 Pixel Shuffle，将<b>空间上相邻的 2×2（4个）$14 \times 14$ 小切片</b>按顺序首尾相接拼接在一起，代表一个 <b>$28 \times 28$ 像素的画面区域</b>。 Token 数量减少为 $1/4$，维度增加为 4 倍（$512 \times 4 = 2,048$ 维）。
+              Pixel Shuffle groups four spatially adjacent patch features into one group. The report confirms the <b>2×2 grouping and 4× reduction in visual-token count</b>; the 512-d and 2,048-d values below remain an explicit teaching example, not disclosed K3 dimensions.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px' }}>
             {/* Left: 2x2 Grid of 14x14 Patches (28x28 Region) */}
             <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>28×28 像素画面区域 (包含 4 个 Patch)</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>Teaching region (four adjacent patches)</span>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: '#0B0F19', padding: '10px', borderRadius: '6px', border: '1px solid #10B981' }}>
                 {samplePatches.map((patch, idx) => (
@@ -758,19 +768,19 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   >
                     <span style={{ color: patch.color, fontWeight: 'bold', fontSize: '0.95rem' }}>Patch {idx + 1}</span>
                     <span style={{ color: '#FFF', fontSize: '0.85rem', marginTop: '4px' }}>14×14 px</span>
-                    <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '2px' }}>ℝ^512</span>
+                    <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '2px' }}>ℝ^512 (example)</span>
                   </div>
                 ))}
               </div>
 
               <div style={{ fontSize: '0.9rem', color: '#94A3B8', lineHeight: '1.4' }}>
-                💡 点击上图任意 Patch，可在右侧观察其在 2,048 维向量中所占有的 512 维数据区间。
+                💡 Click any patch to inspect its 512-value example segment on the right.
               </div>
             </div>
 
             {/* Right: Merged 2,048d Vector Visualizer */}
             <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>合并后的单个 2,048 维 Token 向量结构</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>Packed example vector structure</span>
 
               {/* 4 Segment Blocks */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -799,11 +809,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
                           [{startDim} ~ {endDim}] ({patch.name})
                         </span>
                         <div style={{ color: '#94A3B8', fontSize: '0.88rem', marginTop: '2px' }}>
-                          包含 Patch {idx + 1} 的完整 512 维特征数值，零信息损耗
+                          Contains the example feature segment for Patch {idx + 1}; packing is a rearrangement in this simulator, not a claim of lossless K3 reconstruction.
                         </div>
                       </div>
                       <span style={{ background: patch.color, color: '#000', padding: '4px 10px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold', fontFamily: 'monospace' }}>
-                        512 维
+                        512 values (example)
                       </span>
                     </div>
                   );
@@ -813,10 +823,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
               {/* Total Summary Box */}
               <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10B981', padding: '12px 16px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#FFF', fontWeight: 'bold', fontSize: '1rem' }}>
-                  2×2 拼接结果 Token 向量:
+                  2×2 packed example vector:
                 </span>
                 <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '1.1rem', fontFamily: 'monospace' }}>
-                  512 + 512 + 512 + 512 = 2,048 维
+                  512 + 512 + 512 + 512 = 2,048 values (example)
                 </span>
               </div>
             </div>
@@ -829,53 +839,53 @@ export const MultimodalTokenSimulator: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#F59E0B', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              📐 7,168 维统一高维潜空间（Latent Geometry & Semantic Alignment）
+              📐 7,168-d shared backbone space (latent geometry and alignment)
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              文本与图像在乘以投影矩阵 W_proj 之后，均成为了 7,168 维 `float32` 数组。虽然人类无法直观解释每个数值的具体含义，但大模型通过 93 层 <b>Self-Attention 得分矩阵 (Q · Kᵀ / √d_h)</b> 计算几何相关度，精准实现跨模态理解！
+              Text embeddings and projected visual features enter the same 7,168-d backbone space. The exact visual projector internals are not disclosed. The similarity values below are illustrative; the 93-layer backbone uses attention and other operators to integrate the modalities, rather than guaranteeing a particular cosine score.
             </p>
           </div>
 
           {/* Latent Space Interactive Inspection Canvas */}
           <div style={{ background: '#070913', padding: '20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>
-              高维向量余弦相似度与 Attention 点积对齐计算模拟
+              Illustrative cosine similarity and attention dot-product alignment
             </span>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
               {/* Pair 1: Text "cat" vs Image Patch (Cat Ear) */}
               <div style={{ background: '#0F172A', padding: '16px', borderRadius: '8px', border: '1px solid #10B981', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '1rem' }}>文本: "cat" (x_text)</span>
-                  <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '1rem' }}>图像: 猫耳 Patch (x_vis)</span>
+                  <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '1rem' }}>Text: "cat" (x_text)</span>
+                  <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '1rem' }}>Vision: cat-ear patch (x_vis)</span>
                 </div>
                 <div style={{ height: '8px', background: '#1E293B', borderRadius: '4px', overflow: 'hidden' }}>
                   <div style={{ width: '92.4%', background: '#10B981', height: '100%' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#94A3B8' }}>7,168维 向量点积相似度:</span>
-                  <span style={{ color: '#10B981', fontWeight: 'bold', fontFamily: 'monospace' }}>0.924 (极高对齐)</span>
+                  <span style={{ color: '#94A3B8' }}>Illustrative 7,168-d dot-product similarity:</span>
+                  <span style={{ color: '#10B981', fontWeight: 'bold', fontFamily: 'monospace' }}>0.924 (example)</span>
                 </div>
                 <p style={{ fontSize: '0.88rem', color: '#94A3B8', margin: 0, lineHeight: '1.4' }}>
-                  💡 语言概念 "cat" 的 Query 向量与图像猫耳的 Key 向量在 7,168 维空间中几何夹角极小，模型直接关注此图像区域！
+                  💡 This example shows how a text query could align with a relevant visual feature. It is not a measured K3 activation or attention map.
                 </p>
               </div>
 
               {/* Pair 2: Text "cat" vs Image Patch (Sky Background) */}
               <div style={{ background: '#0F172A', padding: '16px', borderRadius: '8px', border: '1px solid #64748B', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '1rem' }}>文本: "cat" (x_text)</span>
-                  <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '1rem' }}>图像: 蓝天背景 Patch</span>
+                  <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '1rem' }}>Text: "cat" (x_text)</span>
+                  <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '1rem' }}>Vision: sky-background patch</span>
                 </div>
                 <div style={{ height: '8px', background: '#1E293B', borderRadius: '4px', overflow: 'hidden' }}>
                   <div style={{ width: '12.8%', background: '#64748B', height: '100%' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#94A3B8' }}>7,168维 向量点积相似度:</span>
-                  <span style={{ color: '#64748B', fontWeight: 'bold', fontFamily: 'monospace' }}>0.128 (无关区域)</span>
+                  <span style={{ color: '#94A3B8' }}>Illustrative 7,168-d dot-product similarity:</span>
+                  <span style={{ color: '#64748B', fontWeight: 'bold', fontFamily: 'monospace' }}>0.128 (example)</span>
                 </div>
                 <p style={{ fontSize: '0.88rem', color: '#94A3B8', margin: 0, lineHeight: '1.4' }}>
-                  💡 背景区域向量点积权重大幅衰减，模型忽略非关键背景像素。
+                  💡 This example contrasts a relevant and irrelevant feature. Real attention weights depend on the input and learned parameters.
                 </p>
               </div>
             </div>
@@ -888,10 +898,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#EC4899', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              🔄 逆向重构还原验证（2,048d Token 还原回 28×28 原始像素画面）
+              🔄 Reconstruction teaching view (not a documented K3 inverse decoder)
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              验证单 Token 的信息完整性：在自编码器/生成模型中，1 个 2,048 维 Token 可以通过 <b>Un-shuffle 拆分为 4 个 512 维向量</b>，再通过 <b>转置卷积 `ConvTranspose2d` 还原为 4 个 588 维像素块</b>，最终精准重构出 28×28 像素的原图画面！
+              This panel preserves an intuitive inverse-style visualization for teaching. K3’s report confirms visual-token compression and projection into the backbone space, but does not specify an inverse `ConvTranspose2d` decoder or guarantee lossless recovery. The 2,048/512/28×28 values are example geometry only.
             </p>
           </div>
 
@@ -899,10 +909,10 @@ export const MultimodalTokenSimulator: React.FC = () => {
           <div style={{ background: '#070913', padding: '20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>
-                重构图像透明度对比 slider:
+                Reconstruction illustration opacity:
               </span>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <span style={{ color: '#94A3B8', fontSize: '0.95rem' }}>原始像素</span>
+                <span style={{ color: '#94A3B8', fontSize: '0.95rem' }}>Input illustration</span>
                 <input
                   type="range"
                   min="0"
@@ -912,7 +922,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   style={{ width: '180px' }}
                 />
                 <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem', fontFamily: 'monospace' }}>
-                  重构还原比: {reconOpacity}%
+                  Illustration opacity: {reconOpacity}%
                 </span>
               </div>
             </div>
@@ -923,18 +933,18 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 <div style={{ width: '160px', height: '160px', background: '#000', borderRadius: '8px', border: '2px solid #38BDF8', overflow: 'hidden', position: 'relative' }}>
                   <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #10B981 0%, #38BDF8 50%, #A78BFA 100%)' }} />
                 </div>
-                <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>1. 原始 28×28 像素画面</span>
-                <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>2,352 原始 RGB 像素数值</span>
+                <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>1. Input image illustration</span>
+                <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>Example RGB grid: 28×28×3</span>
               </div>
 
               <div style={{ fontSize: '1.8rem', color: '#EC4899' }}>➔</div>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <div style={{ background: '#0F172A', border: '2px solid #EC4899', padding: '12px 18px', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '1rem' }}>1 个 2,048 维 Token</div>
-                  <div style={{ color: '#94A3B8', fontSize: '0.85rem', marginTop: '4px' }}>Un-shuffle 拆分为 4 × 512d</div>
+                  <div style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '1rem' }}>One 2,048-value example token</div>
+                  <div style={{ color: '#94A3B8', fontSize: '0.85rem', marginTop: '4px' }}>Un-shuffle into 4 × 512-value segments</div>
                 </div>
-                <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem' }}>2. 压缩特征潜表达</span>
+                <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem' }}>2. Packed feature representation</span>
               </div>
 
               <div style={{ fontSize: '1.8rem', color: '#EC4899' }}>➔</div>
@@ -943,8 +953,8 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 <div style={{ width: '160px', height: '160px', background: '#000', borderRadius: '8px', border: '2px solid #10B981', overflow: 'hidden', opacity: reconOpacity / 100 }}>
                   <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #10B981 0%, #38BDF8 50%, #A78BFA 100%)' }} />
                 </div>
-                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>3. 还原解码画面 (MSE Loss &lt; 0.001)</span>
-                <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>`ConvTranspose2d` 恢复 588px × 4</span>
+                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>3. Schematic visual reconstruction</span>
+                <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>Illustration only; no K3 MSE claim or inverse decoder specified.</span>
               </div>
             </div>
           </div>

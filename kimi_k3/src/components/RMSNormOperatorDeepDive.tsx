@@ -20,14 +20,14 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.8rem' }}>⚖️</span>
             <h2 style={{ fontSize: '1.6rem', color: '#FFF', margin: 0, fontWeight: 'bold' }}>
-              RMSNorm (均方根归一化) 算子原理与数学推导
+              RMSNorm (Root Mean Square Normalization): operator principles and derivation
             </h2>
             <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid #38BDF8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
               Root Mean Square Layer Normalization
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            深入剖析 Kimi K3 93 层主干网络每层输入端的 RMSNorm 算子：相比传统 LayerNorm 舍弃均值减法 ($-\mu$) 提升 15%~30% GPU 算力效率
+            RMSNorm in the Kimi K3 backbone: unlike LayerNorm, it omits mean-centering. The path is simpler, while the actual performance benefit depends on the kernel and hardware.
           </p>
         </div>
 
@@ -46,7 +46,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            1. 数学公式与计算流
+            1. Mathematical formula and compute flow
           </button>
           <button
             onClick={() => setActiveTab('stepByStep')}
@@ -61,7 +61,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            2. 逐元素推导控制台
+            2. Element-wise derivation console
           </button>
           <button
             onClick={() => setActiveTab('comparison')}
@@ -76,7 +76,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            3. RMSNorm vs LayerNorm 性能对比
+            3. RMSNorm vs. LayerNorm design comparison
           </button>
         </div>
       </div>
@@ -88,7 +88,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
           {/* Main Formula Card */}
           <div style={{ background: '#070913', padding: '20px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-              📐 RMSNorm 核心定义公式 (Mathematical Definition)
+              📐 RMSNorm core definition
             </h3>
             
             <div style={{ background: '#0F172A', padding: '16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', fontFamily: 'monospace', fontSize: '1.2rem', color: '#FFF', textAlign: 'center' }}>
@@ -98,22 +98,22 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginTop: '8px' }}>
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
                 <span style={{ color: '#38BDF8', fontWeight: 'bold' }}>x_i ∈ ℝ^(7,168)</span>
-                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>输入向量的第 i 个特征维度数值</p>
+                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>The i-th feature value of the input vector.</p>
               </div>
 
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <span style={{ color: '#A78BFA', fontWeight: 'bold' }}>RMS(x) 均方根</span>
-                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>向量模长缩放因子，衡量整体方差激活压强</p>
+                <span style={{ color: '#A78BFA', fontWeight: 'bold' }}>RMS(x)</span>
+                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>A scale factor based on the vector’s root-mean-square magnitude.</p>
               </div>
 
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
                 <span style={{ color: '#10B981', fontWeight: 'bold' }}>γ_i ∈ ℝ^(7,168)</span>
-                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>可学习的维度缩放增益向量 (Gain Vector)</p>
+                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>A learned per-dimension gain vector.</p>
               </div>
 
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
                 <span style={{ color: '#F59E0B', fontWeight: 'bold' }}>ε = 1e-5</span>
-                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>防止除零的数值稳定性微小偏移量</p>
+                <p style={{ fontSize: '0.95rem', color: '#94A3B8', margin: '4px 0 0 0' }}>A small numerical-stability term that prevents division by zero.</p>
               </div>
             </div>
           </div>
@@ -136,17 +136,17 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
 
               {/* Square Sum & RMS Branch */}
               <rect x="220" y="40" width="200" height="60" rx="6" fill="#0F172A" stroke="#A78BFA" strokeWidth="1.5" />
-              <text x="320" y="68" fill="#A78BFA" fontSize="14" fontWeight="bold" textAnchor="middle">1. 平方求和 (Square Sum)</text>
+              <text x="320" y="68" fill="#A78BFA" fontSize="14" fontWeight="bold" textAnchor="middle">1. Square and sum</text>
               <text x="320" y="86" fill="#94A3B8" fontSize="12" fontFamily="monospace" textAnchor="middle">Σ x_j^2 / d</text>
 
               <rect x="220" y="140" width="200" height="60" rx="6" fill="#0F172A" stroke="#A78BFA" strokeWidth="1.5" />
-              <text x="320" y="168" fill="#A78BFA" fontSize="14" fontWeight="bold" textAnchor="middle">2. 开方求逆 (1 / RMS)</text>
+              <text x="320" y="168" fill="#A78BFA" fontSize="14" fontWeight="bold" textAnchor="middle">2. Invert the RMS scale</text>
               <text x="320" y="186" fill="#94A3B8" fontSize="12" fontFamily="monospace" textAnchor="middle">1 / √(Mean + ε)</text>
 
               <line x1="420" y1="70" x2="470" y2="105" stroke="#A78BFA" strokeWidth="1.5" />
               <line x1="420" y1="170" x2="470" y2="135" stroke="#A78BFA" strokeWidth="1.5" />
 
-              {/* Scale乘法 */}
+              {/* Scale multiplication */}
               <circle cx="500" cy="120" r="28" fill="rgba(56, 189, 248, 0.15)" stroke="#38BDF8" strokeWidth="2" />
               <text x="500" y="126" fill="#38BDF8" fontSize="18" fontWeight="bold" textAnchor="middle">⊙</text>
 
@@ -166,21 +166,21 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#A78BFA', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              🧪 8 维样本向量逐元素 RMSNorm 实时运算控制台
+              🧪 Live element-wise RMSNorm console with an 8-d sample vector
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              通过改变全局 Gain 参数 $\gamma$ 与稳定性参数 $\epsilon$，观察原始输入向量如何被标准化收敛。
+              Change the global gain parameter $\gamma$ and stability parameter $\epsilon$ to observe how the input vector is normalized.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px' }}>
             {/* Left Controls */}
             <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>控制参数调节 (Control Sliders)</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>Control sliders</span>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#94A3B8' }}>Gain 缩放因子 γ:</span>
+                  <span style={{ color: '#94A3B8' }}>Gain γ:</span>
                   <span style={{ color: '#10B981', fontWeight: 'bold', fontFamily: 'monospace' }}>{sampleScaleGamma.toFixed(2)}</span>
                 </div>
                 <input
@@ -195,7 +195,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#94A3B8' }}>Epsilon 数值稳定项 ε:</span>
+                  <span style={{ color: '#94A3B8' }}>Epsilon ε:</span>
                   <span style={{ color: '#F59E0B', fontWeight: 'bold', fontFamily: 'monospace' }}>{eps.toExponential(1)}</span>
                 </div>
                 <select
@@ -203,7 +203,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
                   onChange={(e) => setEps(parseFloat(e.target.value))}
                   style={{ background: '#0F172A', color: '#FFF', border: '1px solid #475569', padding: '6px', borderRadius: '4px' }}
                 >
-                  <option value={1e-5}>1e-5 (标准推荐值)</option>
+                  <option value={1e-5}>1e-5 (common teaching value)</option>
                   <option value={1e-6}>1e-6</option>
                   <option value={1e-4}>1e-4</option>
                 </select>
@@ -211,7 +211,7 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
 
               {/* Calculated RMS Info */}
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>计算中间值 RMS(x):</span>
+                <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>Intermediate RMS(x):</span>
                 <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '1.1rem', fontFamily: 'monospace' }}>
                   √( {rmsSquareMean.toFixed(4)} + {eps} ) = {rmsVal.toFixed(4)}
                 </span>
@@ -220,13 +220,13 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
 
             {/* Right: Numerical Table Comparison */}
             <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>8 维度输入与归一化输出数值对照表</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>8-d input and normalized output</span>
               
               <div style={{ display: 'grid', gridTemplateColumns: '80px 120px 120px 140px', gap: '8px', marginTop: '12px', fontSize: '1.02rem' }}>
-                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#E2E8F0', fontWeight: 'bold', paddingBottom: '6px' }}>维度 Index</div>
-                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#38BDF8', fontWeight: 'bold', paddingBottom: '6px' }}>原始数值 x_i</div>
-                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#A78BFA', fontWeight: 'bold', paddingBottom: '6px' }}>无缩放 x_i / RMS</div>
-                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#10B981', fontWeight: 'bold', paddingBottom: '6px' }}>最终输出 y_i (×γ)</div>
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#E2E8F0', fontWeight: 'bold', paddingBottom: '6px' }}>Dimension index</div>
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#38BDF8', fontWeight: 'bold', paddingBottom: '6px' }}>Raw x_i</div>
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#A78BFA', fontWeight: 'bold', paddingBottom: '6px' }}>Unscaled x_i / RMS</div>
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#10B981', fontWeight: 'bold', paddingBottom: '6px' }}>Output y_i (×γ)</div>
 
                 {sampleVector.map((val, idx) => {
                   const unscaled = val / rmsVal;
@@ -251,37 +251,37 @@ export const RMSNormOperatorDeepDive: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#10B981', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              ⚡ 为什么 Kimi K3 全全面采用 RMSNorm 替换传统 LayerNorm？
+              ⚡ Why does Kimi K3 use RMSNorm instead of LayerNorm?
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              研究表明，LayerNorm 中的**均值偏移减法（$-\mu$）对防止激活爆发并没有实质贡献**，而核心的控制力全来自于**均方根模长缩放**。RMSNorm 移除了均值计算，在 GPU 显存带宽上节省了二次 Memory Pass！
+              RMSNorm omits mean-centering and controls scale with the root-mean-square magnitude. This makes the path simpler and can suit high-throughput kernels; it is a design tradeoff, not evidence that mean subtraction is useless in every model.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
             {/* LayerNorm Box */}
             <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '1.1rem' }}>❌ 传统 LayerNorm (Layer Normalization)</span>
+              <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '1.1rem' }}>❌ Conventional LayerNorm</span>
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.95rem', color: '#FFF' }}>
                 y_i = ((x_i - μ) / √(σ² + ε)) · γ_i + β_i
               </div>
               <ul style={{ fontSize: '0.98rem', color: '#94A3B8', paddingLeft: '20px', lineHeight: '1.6', margin: 0 }}>
-                <li>需要先计算均值 μ = (Σ x_i) / d；</li>
-                <li>再计算方差 σ² = (Σ (x_i - μ)²) / d；</li>
-                <li>在 GPU Kernel 中需要 <b>两次全局 Reduction 操作</b>，造成额外的 SRAM/DRAM 内存读写延迟。</li>
+                <li>Computes the mean μ = (Σ x_i) / d;</li>
+                <li>Computes the variance σ² = (Σ (x_i - μ)²) / d;</li>
+                <li>Typically needs <b>two reduction stages</b> in a fused GPU path, with additional memory and arithmetic work.</li>
               </ul>
             </div>
 
             {/* RMSNorm Box */}
             <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid #10B981', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '1.1rem' }}>✅ Kimi K3 采用的 RMSNorm</span>
+              <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '1.1rem' }}>✅ RMSNorm used by Kimi K3</span>
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.95rem', color: '#FFF' }}>
                 y_i = (x_i / √( (Σ x_j²) / d + ε )) · γ_i
               </div>
               <ul style={{ fontSize: '0.98rem', color: '#94A3B8', paddingLeft: '20px', lineHeight: '1.6', margin: 0 }}>
-                <li>完全跳过均值 $\mu$ 计算与减法操作；</li>
-                <li>只需要 **一次** 平方求和 Reduction 操作；</li>
-                <li>在 93 层大模型深度拓扑下，算子耗时减少 **15%~30%**，极大缓解内存带宽瓶颈！</li>
+                <li>Skips mean $\mu$ computation and mean subtraction;</li>
+                <li>Uses one sum-of-squares reduction for the RMS term;</li>
+                <li>The actual benefit depends on the kernel, hardware, and tensor shape; the K3 report does not promise a uniform 15%–30% latency gain.</li>
               </ul>
             </div>
           </div>

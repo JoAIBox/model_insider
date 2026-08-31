@@ -4,7 +4,7 @@ import { MoETrainingExplorer } from './MoETrainingExplorer';
 export const MoESimulator: React.FC = () => (
   <div className="tab-panel active">
     <header>
-      <div className="badge">Chapter 2.3 — Stable LatentMoE</div>
+      <div className="badge">Chapter 2.5 — Stable LatentMoE</div>
       <h1>Stable LatentMoE: routing, learning, and expert parallelism</h1>
       <p className="subtitle">A report-grounded walkthrough of sparse routing. It uses only published architecture figures and does not invent router scores, expert loads, or per-expert parameter counts.</p>
     </header>

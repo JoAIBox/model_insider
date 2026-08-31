@@ -16,6 +16,14 @@ export const MoonViTSimulator: React.FC = () => {
   // Attention Heatmap states
   const [hoveredHeatCell, setHoveredHeatCell] = useState<{ r: number; c: number } | null>(null);
 
+  // Report-grounded maximum-resolution geometry. This is a single-image count;
+  // temporal pooling and text/context overhead are intentionally excluded.
+  const reportResolution = 3584;
+  const reportPatchSize = 14;
+  const reportPatchesPerSide = reportResolution / reportPatchSize;
+  const reportPatchTokens = reportPatchesPerSide * reportPatchesPerSide;
+  const reportPackedTokens = reportPatchTokens / 4;
+
   // Sample image options (4x4 grids)
   const imagesMock = [
     [
@@ -80,9 +88,10 @@ export const MoonViTSimulator: React.FC = () => {
       if (activeTab === 'pixelShuffle') {
         // Draw 4x4 Grid image slicing and Pixel-Shuffle
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 14px Inter, sans-serif';
+        ctx.font = 'bold 13px Inter, sans-serif';
         ctx.fillText('4×4 Pixel Input Image', 30, 30);
-        ctx.fillText('Patch Segmentation & Embedding (d_pixel=14×14×3)', width * 0.46, 30);
+        ctx.fillText('Patch Segmentation &', width * 0.46, 24);
+        ctx.fillText('Embedding (14×14×3)', width * 0.46, 42);
 
         const currentImg = imagesMock[selectedImgIdx];
         const cellSize = 30;
@@ -135,7 +144,7 @@ export const MoonViTSimulator: React.FC = () => {
         if (sliceProgress >= 0.9) {
           ctx.fillStyle = '#94A3B8';
           ctx.font = '13px Inter, sans-serif';
-          ctx.fillText("Lossless channel transformation: Input image downsampled, each block converted to a 1D Token embedding vector", 30, height - 20);
+          ctx.fillText("Schematic channel transformation: visual positions become visual-token features", 30, height - 20);
         }
 
       } else if (activeTab === 'factorizedAttn') {
@@ -280,12 +289,12 @@ export const MoonViTSimulator: React.FC = () => {
         ctx.fillRect(chartX + 15, chartY + 15, 12, 6);
         ctx.fillStyle = '#94A3B8';
         ctx.font = '10px Outfit';
-        ctx.fillText("SigLIP Visual Contrastive Norm (highly unstable)", chartX + 32, chartY + 21);
+        ctx.fillText("Illustrative external-encoder baseline trend", chartX + 32, chartY + 21);
 
         ctx.fillStyle = '#10B981';
         ctx.fillRect(chartX + 200, chartY + 15, 12, 6);
         ctx.fillStyle = '#94A3B8';
-        ctx.fillText("MoonViT-V2 Self-developed Native (perfect convergence)", chartX + 217, chartY + 21);
+        ctx.fillText("MoonViT-V2 illustrative stable trend", chartX + 217, chartY + 21);
       }
     };
 
@@ -308,7 +317,7 @@ export const MoonViTSimulator: React.FC = () => {
 
   return (
     <div className="tab-panel">
-      <div className="badge">Chapter 2.4 - Native Vision (Native Multimodal Vision)</div>
+      <div className="badge">Chapter 2.6 - Native Vision (Native Multimodal Vision)</div>
       <h2 style={{ color: '#FFFFFF', marginTop: '10px' }}>MoonViT-V2 Native Multimodal Vision Encoder</h2>
       <p style={{ color: '#94A3B8', fontSize: '1.08rem', marginBottom: '20px' }}>
         Kimi-K3 completely discards external pre-trained image encoders such as SigLIP, and instead uses the <b>MoonViT-V2</b> vision model trained from scratch, jointly encoded in an autoregressive manner.
@@ -350,7 +359,7 @@ export const MoonViTSimulator: React.FC = () => {
           {activeTab === 'pixelShuffle' && (
             <div className="control-panel" style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button className="btn-primary" onClick={handleSliceClick}>
-                Start Patch Segmentation Animation
+                {isSlicing ? 'Animating patch segmentation…' : sliceProgress >= 1 ? 'Replay patch segmentation animation' : 'Start patch segmentation animation'}
               </button>
               <span style={{ fontSize: '1.02rem', color: '#94A3B8' }}>Switch Sample Image:</span>
               <select 
@@ -365,6 +374,29 @@ export const MoonViTSimulator: React.FC = () => {
                 <option value="1">Sample Image B (Central Symmetry)</option>
                 <option value="2">Sample Image C (Ring Contour)</option>
               </select>
+            </div>
+          )}
+
+          {activeTab === 'pixelShuffle' && (
+            <div style={{ marginTop: '12px', padding: '14px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.4)', background: 'rgba(167, 139, 250, 0.08)' }}>
+              <div style={{ color: '#C4B5FD', fontWeight: 'bold', marginBottom: '6px' }}>📏 K3 report-grounded resolution example</div>
+              <div style={{ color: '#E2E8F0', lineHeight: '1.55', fontFamily: 'monospace', fontSize: '0.92rem' }}>
+                {reportResolution}×{reportResolution} ÷ {reportPatchSize}×{reportPatchSize} → {reportPatchesPerSide}×{reportPatchesPerSide} = {reportPatchTokens.toLocaleString()} patch tokens
+                <br />
+                {reportPatchTokens.toLocaleString()} ÷ 4 via 2×2 Pixel Shuffle → {reportPackedTokens.toLocaleString()} visual tokens
+              </div>
+              <small style={{ display: 'block', color: '#94A3B8', marginTop: '7px', lineHeight: '1.45' }}>
+                This supplements the small teaching canvas. The report says inputs up to 3,584×3,584 are supported by the fourfold visual-token reduction; the counts above describe one image before any temporal pooling, text, or other context overhead.
+              </small>
+            </div>
+          )}
+
+          {activeTab === 'factorizedAttn' && (
+            <div style={{ marginTop: '12px', padding: '14px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.35)', background: 'rgba(56, 189, 248, 0.08)', color: '#E2E8F0', lineHeight: '1.5' }}>
+              <b style={{ color: '#38BDF8' }}>How factorization reduces redundant work</b>
+              <div style={{ marginTop: '6px', color: '#94A3B8' }}>
+                Spatial attention connects visual tokens within one frame. Temporal attention connects corresponding spatial positions across frames. Temporal pooling can then compress the time dimension. This is a teaching diagram; exact attention maps and pooling settings are not fully disclosed in the report.
+              </div>
             </div>
           )}
 
@@ -429,10 +461,10 @@ export const MoonViTSimulator: React.FC = () => {
             </div>
 
             <div style={{ flex: 1, fontSize: '1.02rem', color: '#94A3B8', lineHeight: '1.4' }}>
-              <span style={{ color: '#E2E8F0', fontWeight: 'bold' }}>Adaptive Capture of Salient Image Features</span>
+              <span style={{ color: '#E2E8F0', fontWeight: 'bold' }}>Illustrative visual-attention heatmap</span>
               <p style={{ marginTop: '4px' }}>
-                • Hover over the left grid to probe the attention weight coefficient of each image block.<br />
-                • In joint learning, the attention weights stably lock onto the boundaries of core objects, indicating a physical-level semantic alignment between self-supervised image features and natural language.
+                • Hover over the left grid to probe a toy attention coefficient for each image block.<br />
+                • This heatmap is for intuition only; it is not a reported Kimi K3 attention map and does not establish stable object-boundary alignment.
               </p>
             </div>
           </div>
@@ -440,7 +472,7 @@ export const MoonViTSimulator: React.FC = () => {
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', fontSize: '1.02rem', lineHeight: '1.5' }}>
             <span style={{ color: '#FFB000', fontWeight: 'bold' }}>🍳 The 'Puzzle Pieces' Metaphor for Image Patching</span>
             <p style={{ color: '#94A3B8', marginTop: '4px' }}>
-              It's like cutting a complete puzzle card into 16 small fragments, and rolling each piece into a small scroll (vector). The traditional approach requires putting a hard outer shell (an external image network) on the scrolls. Kimi-K3's self-developed vision model allows these small scrolls to be stitched perfectly with the subsequent text scrolls, reducing information leakage and gradient misalignment at the seams.
+              It's like cutting a complete puzzle card into 16 small fragments, and rolling each piece into a small scroll (vector). The traditional approach requires putting a hard outer shell (an external image network) on the scrolls. Kimi-K3's native vision model is trained with the language model under the same next-token prediction objective, helping the visual and textual representations co-adapt across the multimodal interface.
             </p>
           </div>
         </div>

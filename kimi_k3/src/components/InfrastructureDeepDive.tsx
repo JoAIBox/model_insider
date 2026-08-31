@@ -192,11 +192,14 @@ export const InfrastructureDeepDive: React.FC = () => {
 
               {/* Cache size visual comparison bars (RAM Stick SVGs) */}
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', background: '#02040a', padding: '20px 15px', borderRadius: '8px' }}>
+                <small style={{ flexBasis: '100%', display: 'block', color: '#64748B', lineHeight: '1.45' }}>
+                  Comparison scope: separate illustrative serving-memory scales. Batch size, layer coverage, head width, dtype, and implementation details are abstracted into the teaching coefficients; these absolute GB values are not a reported full-model measurement and are not directly comparable with the KDA operator panel.
+                </small>
                 
                 {/* Standard KV Cache RAM Stick */}
                 <div style={{ flex: '1', minWidth: '240px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#94A3B8', marginBottom: '8px' }}>
-                    <span>Standard KV Cache Memory (grows linearly with sequence)</span>
+                    <span>Full-attention KV-growth toy estimate (O(N))</span>
                     <span style={{ color: contextSlider >= 800 ? '#EF4444' : '#FFB000', fontWeight: 'bold' }}>
                       {(contextSlider * 0.08).toFixed(1)} GB {contextSlider >= 800 && '⚠️ OOM!'}
                     </span>
@@ -239,9 +242,12 @@ export const InfrastructureDeepDive: React.FC = () => {
                 {/* KDA Cache RAM Stick */}
                 <div style={{ flex: '1', minWidth: '240px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#E2E8F0', marginBottom: '8px' }}>
-                    <span>KDA Chunk Constant Memory (diagonal matrix)</span>
+                    <span>KDA state-path toy estimate (O(1) in N)</span>
                     <span style={{ color: '#10B981', fontWeight: 'bold' }}>0.08 GB (O(1) Constant)</span>
                   </div>
+                  <small style={{ display: 'block', color: '#94A3B8', marginBottom: '8px', lineHeight: '1.45' }}>
+                    Illustrative KDA state-path estimate, not total inference memory. Exact size depends on head width, dtype, batch size, and implementation. MLA layers retain per-token latent KV entries; weights, activations, and runtime workspace are separate.
+                  </small>
                   
                   {/* SVG RAM Stick */}
                   <svg width="100%" height="70" viewBox="0 0 260 70" style={{ background: '#05070c', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
@@ -371,7 +377,7 @@ export const InfrastructureDeepDive: React.FC = () => {
               <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '12px' }}>⏰ Pipeline Parallel Bubble ViT Compute Allocation (DEP Evolution)</h3>
               
               {/* ViT bubble packing Gantt timeline chart (Item 74) */}
-              <div style={{ background: '#02040a', padding: '12px', borderRadius: '8px', marginBottom: '15px' }}>
+              <div style={{ background: '#02040a', padding: '12px', borderRadius: '8px', marginBottom: '15px', overflowX: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '1.15rem', color: '#E2E8F0', fontWeight: 'bold' }}>PP Pipeline Stages Timeline</span>
                   <button 
@@ -383,7 +389,7 @@ export const InfrastructureDeepDive: React.FC = () => {
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '1.15rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '1.15rem', minWidth: '280px' }}>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <div style={{ width: '50px', color: '#94A3B8' }}>GPU 1:</div>
                     <div style={{ width: '40px', background: '#38BDF8', height: '14px', borderRadius: '2px' }} title="LLM Forward" />
@@ -410,7 +416,7 @@ export const InfrastructureDeepDive: React.FC = () => {
               </div>
 
               <div style={{ fontSize: '1.02rem', color: '#94A3B8', lineHeight: '1.5' }}>
-                👉 <b>Bubble Throughput:</b> Traditional multimodal pipelines often generate huge idle bubbles because image processing and language generation are out of sync. Kimi-K3 splits ViT processing into micro-batches, inserting them precisely into the idle bubbles of pipeline parallelism, achieving **100% full-load hardware utilization**.
+                👉 <b>Bubble Throughput:</b> Traditional multimodal pipelines can generate idle bubbles because image processing and language generation are out of sync. Kimi-K3 splits ViT processing into micro-batches and overlaps it with pipeline bubbles; the report describes improved utilization, not a universal 100% guarantee.
               </div>
             </div>
           )}

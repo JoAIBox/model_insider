@@ -275,7 +275,7 @@ export const AttnResSimulator: React.FC = () => {
   return (
     <div className="tab-panel active">
       <header>
-        <div className="badge">Chapter 2.2 - Attention Residuals (AttnRes)</div>
+        <div className="badge">Chapter 2.7 - Attention Residuals (AttnRes)</div>
         <h1>Attention Residuals (AttnRes) Connections</h1>
         <p className="subtitle">Combating signal dilution of low-level semantic and visual features caused by deep PreNorm stacking</p>
       </header>
@@ -305,8 +305,8 @@ export const AttnResSimulator: React.FC = () => {
 
           <p style={{ fontSize: '1.02rem', color: '#94A3B8', marginBottom: '15px' }}>
             {mode === 'standard' 
-              ? "⚠️ Under traditional PreNorm, features extracted at low levels are severely diluted through cumulative residuals. By Layer 93, the signal retention drops to ~15% (red), making it extremely hard for deep layers to capture low-level local or visual details." 
-              : "✅ With AttnRes enabled, deep layers use attention to directly retrieve from all preceding Block boundaries and the input embedding, maintaining signal retention above 90% (green) without dilution!"}
+              ? "⚠️ This red curve is a teaching illustration of how a chosen residual-signal proxy can attenuate across depth under a conventional stack. It is not a measured K3 retention percentage or a universal Layer-93 result."
+              : "✅ With AttnRes enabled, deep layers selectively retrieve the input embedding, preceding block summaries, and the current block's partial sum."}
           </p>
 
           {/* Block Mode selector when in AttnRes */}
@@ -368,7 +368,7 @@ export const AttnResSimulator: React.FC = () => {
             </div>
             <div>
               <div style={{ fontSize: '1.02rem', fontWeight: 'bold', color: '#FFF' }}>Input Token Embedding ($b_0 = h_1$)</div>
-              <div style={{ fontSize: '0.9rem', color: '#94A3B8' }}>Integrates multimodal image/video features (MoonViT) and word embeddings</div>
+              <div style={{ fontSize: '0.9rem', color: '#94A3B8' }}>Integrates multimodal image/video features (MoonViT) and text-token embeddings</div>
             </div>
             {hoveredLayerIdx !== null && isAttended(-1) && (
               <span className="badge" style={{ marginLeft: 'auto', background: '#10B981', color: '#000', fontSize: '0.9rem', padding: '2px 6px' }}>
@@ -665,7 +665,9 @@ export const AttnResSimulator: React.FC = () => {
                     α_(i→l) = exp(q_lᵀ · RMSNorm(k_i)) / Σ_j exp(q_lᵀ · RMSNorm(k_j))
                   </div>
                   <div style={{ color: '#38BDF8', fontFamily: 'monospace' }}>
-                    h_l = Layer_l(x) + Σ_(i=0) to (l-1) α_(i→l) · v_i
+                    r_l = Σ_(i=0) to (l-1) α_(i→l) · v_i
+
+                    x_(l+1) = x_l + F_l(r_l)  # separate outer residual wrapper
                   </div>
                 </div>
 
@@ -688,7 +690,7 @@ export const AttnResSimulator: React.FC = () => {
                     Space/Comm Overhead: O(L·d) → O(N·d) (L = 93 layers, N = 8 blocks)
                   </div>
                   <div style={{ color: '#94A3B8', fontSize: '1.15rem', lineHeight: '1.4' }}>
-                    For Kimi K3 (93 layers): Full AttnRes requires 4,371 layer-to-layer connections. Block partitioning (12 layers/block) requires only 493 connections, <b>reducing resident memory activations and cross-stage pipeline communication overhead by 88.7% (releasing ~8.8x compute capacity)</b>.
+                    For Kimi K3 (93 layers), this visualization derives illustrative connection counts from the full and block layouts. The published claim is the asymptotic reduction in resident memory and communication overhead, not a direct 8.8× compute-capacity gain.
                   </div>
                 </div>
               </div>

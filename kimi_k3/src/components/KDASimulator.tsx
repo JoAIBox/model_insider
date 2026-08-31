@@ -226,7 +226,7 @@ export const KDASimulator: React.FC = () => {
     ctx.font = '11px Outfit';
     ctx.fillText("• Standard Attention: Writing is never erased, keeping history forever (memory explosion)", rightStartX + 12, rightStartY + 138);
     ctx.fillText("• KDA Adaptive Erase: Updates only critical strokes dynamically (constant memory)", rightStartX + 12, rightStartY + 158);
-    ctx.fillText("• Writing Persistence: Governed by forget factors, useless words discarded quickly", rightStartX + 12, rightStartY + 178);
+        ctx.fillText("• Writing Persistence: Governed by forget factors; low-value token signals fade quickly", rightStartX + 12, rightStartY + 178);
 
     ctx.restore();
   }, [activeIdx, alpha]);
@@ -367,7 +367,7 @@ export const KDASimulator: React.FC = () => {
 
               <div style={{ background: '#090D16', padding: '10px', borderRadius: '6px', borderLeft: '3px solid #FFB000' }}>
                 <span style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Adaptive Decay (Lower-bounded Decay)</span><br />
-                KDA provides independent 'forget speeds' for different information channels. Important data channels (e.g., character names, key entities) receive high decay thresholds (strong memory, writing remains persistent); transitional stop words receive low thresholds (writing cools and gets erased instantly), targeting GPU compute resources efficiently.
+                KDA provides independent 'forget speeds' for different information channels. Important signals (e.g., entity features) can remain persistent while transitional token signals can fade, targeting GPU compute resources efficiently.
               </div>
             </div>
           </div>

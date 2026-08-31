@@ -62,7 +62,7 @@ export const EvaluationDashboard: React.FC = () => {
     };
   };
 
-  // Mock radar score values
+  // Normalized illustrative radar values; they are not a single official benchmark.
   const k3RadarPoints = [
     getRadarPoint(0, 93.5),   // Reasoning
     getRadarPoint(60, 85.0),  // Coding
@@ -99,7 +99,7 @@ export const EvaluationDashboard: React.FC = () => {
       <div className="badge">Chapter 6 - Benchmark & Evaluation</div>
       <h2 style={{ color: '#FFFFFF', marginTop: '10px' }}>Kimi-K3 Public Benchmarks, Security Evaluation & Inference Cost</h2>
       <p style={{ color: '#94A3B8', fontSize: '1.08rem', marginBottom: '20px' }}>
-        In Max Effort mode, Kimi-K3 performs on par with top closed-source models like Fable 5 and Sol 5.6, while significantly leading common open-source models.
+        In the reported Max Effort comparisons, Kimi K3 reaches frontier-level performance and outperforms several evaluated alternatives, while still trailing the strongest proprietary models on some overall comparisons.
       </p>
 
       {/* Control panel for evaluation tabs */}
@@ -152,6 +152,12 @@ export const EvaluationDashboard: React.FC = () => {
                     <circle cx="170" cy="130" r="64" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
                     <circle cx="170" cy="130" r="42" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
                     <circle cx="170" cy="130" r="21" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+
+                    {/* Normalized scale: the rings represent 25 / 50 / 75 / 100. */}
+                    <text x="176" y="112" fill="#64748B" fontSize="9">25</text>
+                    <text x="176" y="91" fill="#64748B" fontSize="9">50</text>
+                    <text x="176" y="69" fill="#64748B" fontSize="9">75</text>
+                    <text x="176" y="48" fill="#64748B" fontSize="9">100</text>
 
                     {/* Axis Lines */}
                     {Array.from({ length: 6 }).map((_, idx) => {
@@ -223,6 +229,9 @@ export const EvaluationDashboard: React.FC = () => {
                     GPT-5.6 Sol
                   </label>
                 </div>
+              </div>
+              <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#CBD5E1', lineHeight: '1.45' }}>
+                <b style={{ color: '#FCD34D' }}>Interpretation boundary:</b> normalized illustrative capability view, not a single official benchmark. The axes combine teaching categories rather than reproducing one report table; use the benchmark tabs below for named tasks and reported scores.
               </div>
             </div>
           )}
@@ -304,9 +313,9 @@ export const EvaluationDashboard: React.FC = () => {
                   <text x="42" y="180" fill="#94A3B8" fontSize="12" textAnchor="end">50%</text>
 
                   {/* Scatter dots */}
-                  {/* Kimi K3 ($2.5/M, 93.5%) - Top Left */}
+                  {/* Kimi K3 cache-miss input price ($3/M, 93.5%) - Top Left */}
                   <circle cx="105" cy="50" r="7" fill="#10B981" />
-                  <text x="118" y="54" fill="#10B981" fontSize="13" fontWeight="bold">Kimi K3 ($2.5 / M)</text>
+                  <text x="118" y="54" fill="#10B981" fontSize="13" fontWeight="bold">Kimi K3 ($3 / M input)</text>
 
                   {/* GLM-5.2 ($2.0/M, 91.2%) */}
                   <circle cx="95" cy="72" r="5" fill="#64748B" />
@@ -326,7 +335,7 @@ export const EvaluationDashboard: React.FC = () => {
                 </svg>
               </div>
               <p style={{ fontSize: '1.02rem', color: '#94A3B8', marginTop: '10px', lineHeight: '1.4' }}>
-                💡 <b>Water Pipe Parallel Cost Metaphor:</b> For the same top graduate-level puzzle performance (GPQA), Kimi-K3's adaptive gating and 4-bit compression significantly reduce compute requirements per query, making its price only **1/6 of Fable 5** and other closed-source models. It delivers frontier intelligence at a highly cost-effective price point.
+                💡 <b>Cost interpretation:</b> The Kimi K3 point uses the official cache-miss input price: <b>$3.00 / MTok</b>. The official API also lists <b>$0.30 / MTok</b> for cache-hit input and <b>$15.00 / MTok</b> for output. The comparison points are illustrative and are not an apples-to-apples pricing benchmark; prices and benchmark results should be read with their source date and evaluation setup.
               </p>
             </div>
           )}
@@ -389,13 +398,16 @@ export const EvaluationDashboard: React.FC = () => {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px' }}>
                 <span style={{ color: '#94A3B8' }}>Agent Arena (Elo Score)</span>
-                <span style={{ color: '#10B981', fontWeight: 'bold' }}>1228 (#1/15)</span>
+                <span style={{ color: '#10B981', fontWeight: 'bold' }}>9.1 (#4/37)</span>
               </div>
             </div>
           </div>
 
           <div style={{ borderTop: '1px solid #1E293B', paddingTop: '10px', marginTop: '15px', color: '#10B981', fontSize: '1.02rem' }}>
-            🔒 <b>Safety Commitment:</b> Kimi-K3 actively restricts the output of network penetration and high-risk unauthorized exploit synthesis, and has robust multi-layer sandbox isolation on the system side to prevent malicious misuse.
+            🔒 <b>Evaluation scope:</b> The official report separately evaluates defensive vulnerability discovery and end-to-end exploit development. Results depend on the benchmark environment, harness, and model version; this panel is not a product safety guarantee.
+            <div style={{ marginTop: '8px', color: '#64748B', fontSize: '0.9rem' }}>
+              Sources: Kimi K3 Technical Report for evaluation results; official Kimi API pricing page for token prices.
+            </div>
           </div>
         </div>
 

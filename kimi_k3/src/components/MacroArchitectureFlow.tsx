@@ -80,8 +80,10 @@ const nodes: ArchitectureNode[] = [
   },
 ];
 
+type ArchitectureDetailTab = 'multimodal' | 'kda' | 'op_mla' | 'op_moe' | 'op_attnres' | 'op_unembed';
+
 interface MacroArchitectureFlowProps {
-  onNavigateTab?: (tab: any) => void;
+  onNavigateTab?: (tab: ArchitectureDetailTab) => void;
 }
 
 export const MacroArchitectureFlow: React.FC<MacroArchitectureFlowProps> = ({ onNavigateTab }) => {
@@ -89,18 +91,18 @@ export const MacroArchitectureFlow: React.FC<MacroArchitectureFlowProps> = ({ on
   const [openOperator, setOpenOperator] = useState<string | null>(null);
   const selected = nodes.find((node) => node.id === selectedId) ?? nodes[0];
 
-  const nodeTabMapping: Record<string, any> = {
+  const nodeTabMapping: Record<string, ArchitectureDetailTab> = {
     input: 'multimodal',
     attention: 'kda',
     attnres: 'op_attnres',
     moe: 'op_moe',
-    head: 'op_unembed',
+    output: 'op_unembed',
   };
 
   return (
     <section className="card architecture-flow" aria-labelledby="architecture-flow-title">
       <div className="card-title" id="architecture-flow-title">🧭 System architecture: how one token moves through Kimi K3</div>
-      <p className="flow-intro">Every card distinguishes published figures from undisclosed ones. Select a module to reveal its operator-level data path and published dimensions. (💡 单击查看初步概要 | 双击直接跳转详细算法推导)</p>
+      <p className="flow-intro">Every card distinguishes published figures from undisclosed ones. Select a module to reveal its operator-level data path and published dimensions. (💡 Click for a summary | use the buttons below, or double-click a card, to open a detailed derivation)</p>
       <div className="flow-track" role="list">
         {nodes.map((node, index) => (
           <React.Fragment key={node.id}>
@@ -111,7 +113,7 @@ export const MacroArchitectureFlow: React.FC<MacroArchitectureFlowProps> = ({ on
               style={{ '--node-color': node.color } as React.CSSProperties}
               role="listitem"
               aria-pressed={selectedId === node.id}
-              title="单击: 切换初步概要 | 双击: 直接跳转详细推导"
+              title="Click: switch summary | double-click: open detailed derivation"
             >
               <span className="flow-step">{node.step}</span>
               <strong>{node.title}</strong>
@@ -150,6 +152,18 @@ export const MacroArchitectureFlow: React.FC<MacroArchitectureFlowProps> = ({ on
                 </button>
               );
             })}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+            {selected.id === 'attention' && (
+              <>
+                <button className="btn" onClick={() => onNavigateTab?.('kda')}>Open KDA detail</button>
+                <button className="btn" onClick={() => onNavigateTab?.('op_mla')}>Open MLA detail</button>
+              </>
+            )}
+            {selected.id === 'attnres' && <button className="btn" onClick={() => onNavigateTab?.('op_attnres')}>Open AttnRes detail</button>}
+            {selected.id === 'experts' && <button className="btn" onClick={() => onNavigateTab?.('op_moe')}>Open Stable LatentMoE detail</button>}
+            {selected.id === 'input' && <button className="btn" onClick={() => onNavigateTab?.('multimodal')}>Open multimodal token flow</button>}
+            {selected.id === 'output' && <button className="btn" onClick={() => onNavigateTab?.('op_unembed')}>Open decoding detail</button>}
           </div>
         </div>
       </div>

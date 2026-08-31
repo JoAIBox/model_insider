@@ -15,9 +15,17 @@ import { MLAOperatorDeepDive } from './components/MLAOperatorDeepDive';
 import { MoEOperatorDeepDive } from './components/MoEOperatorDeepDive';
 import { AttnResOperatorDeepDive } from './components/AttnResOperatorDeepDive';
 import { UnembeddingOperatorDeepDive } from './components/UnembeddingOperatorDeepDive';
-import { RoPEOperatorDeepDive } from './components/RoPEOperatorDeepDive';
+import { BeginnerAcademy } from './components/beginner/BeginnerAcademy';
+import { LessonTokens } from './components/beginner/LessonTokens';
+import { LessonAttention } from './components/beginner/LessonAttention';
+import { LessonKDA } from './components/beginner/LessonKDA';
+import { LessonMoE } from './components/beginner/LessonMoE';
+import { LessonAttnRes } from './components/beginner/LessonAttnRes';
+import { LessonPipeline } from './components/beginner/LessonPipeline';
 
-type Tab = 'overview' | 'kda' | 'attnres' | 'moe' | 'vision' | 'multimodal' | 'muon' | 'pretrain' | 'posttrain' | 'rl' | 'infrastructure' | 'evaluation' | 'cases' | 'op_rmsnorm' | 'op_kda' | 'op_mla' | 'op_rope' | 'op_moe' | 'op_attnres' | 'op_unembed';
+const beginnerLessons = [LessonTokens, LessonAttention, LessonKDA, LessonMoE, LessonAttnRes, LessonPipeline];
+
+type Tab = 'beginner' | 'overview' | 'kda' | 'attnres' | 'moe' | 'vision' | 'multimodal' | 'muon' | 'pretrain' | 'posttrain' | 'rl' | 'infrastructure' | 'evaluation' | 'cases' | 'op_rmsnorm' | 'op_kda' | 'op_mla' | 'op_moe' | 'op_attnres' | 'op_unembed';
 
 type NavSection = {
   title: string;
@@ -25,6 +33,7 @@ type NavSection = {
 };
 
 const navSections: NavSection[] = [
+  { title: '🎓 Transformer Fundamentals', items: [{ id: 'beginner', label: 'Animated Transformer Guide' }] },
   { title: 'Chapter 1: System Overview', items: [{ id: 'overview', label: 'Architecture Overview' }] },
   {
     title: 'Chapter 2: Model Architecture',
@@ -33,12 +42,11 @@ const navSections: NavSection[] = [
       { id: 'op_rmsnorm', label: '§2.2 RMSNorm Operator' },
       { id: 'kda', label: '§2.3 KDA Gated Delta Attention' },
       { id: 'op_mla', label: '§2.4 MLA Latent Attention' },
-      { id: 'op_rope', label: '§2.5 RoPE Rotary Position Encoding' },
-      { id: 'moe', label: '§2.6 Stable LatentMoE' },
-      { id: 'vision', label: '§2.7 MoonViT Native Vision' },
-      { id: 'attnres', label: '§2.8 AttnRes Cross-Layer Retrieval' },
-      { id: 'muon', label: '§2.9 Per-Head Muon Optimizer' },
-      { id: 'op_unembed', label: '§2.10 Unembedding Output Head' },
+      { id: 'moe', label: '§2.5 Stable LatentMoE' },
+      { id: 'vision', label: '§2.6 MoonViT Native Vision' },
+      { id: 'attnres', label: '§2.7 AttnRes Cross-Layer Retrieval' },
+      { id: 'muon', label: '§2.8 Per-Head Muon Optimizer' },
+      { id: 'op_unembed', label: '§2.9 Unembedding Output Head' },
     ],
   },
   { title: 'Chapter 3: Pre-training', items: [{ id: 'pretrain', label: 'Data and Training' }] },
@@ -56,6 +64,7 @@ const navSections: NavSection[] = [
 
 const getTabContent = (activeTab: Tab, onNavigate: (tab: Tab) => void): React.ReactNode => {
   const tabMap: Record<Tab, React.ReactNode> = {
+    beginner: <BeginnerAcademy lessons={beginnerLessons} />,
     overview: <Dashboard onNavigateTab={onNavigate} />,
     kda: <KDAOperatorDeepDive />,
     attnres: <AttnResOperatorDeepDive />,
@@ -74,14 +83,13 @@ const getTabContent = (activeTab: Tab, onNavigate: (tab: Tab) => void): React.Re
     op_mla: <MLAOperatorDeepDive />,
     op_moe: <MoEOperatorDeepDive />,
     op_attnres: <AttnResOperatorDeepDive />,
-    op_rope: <RoPEOperatorDeepDive />,
     op_unembed: <UnembeddingOperatorDeepDive />,
   };
   return tabMap[activeTab];
 };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('beginner');
 
   return (
     <div className="app-container">
@@ -118,6 +126,17 @@ const App: React.FC = () => {
             ))}
           </ul>
         </nav>
+
+        <a
+          className="nav-item"
+          href="https://poloclub.github.io/transformer-explainer/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open the official Interactive Transformer reference"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor" /></svg>
+          🖱️ Interactive Transformer ↗
+        </a>
 
         <div className="sidebar-footer">
           <p>Based on the Kimi K3 technical report</p>

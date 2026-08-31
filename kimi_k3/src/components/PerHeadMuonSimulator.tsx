@@ -35,7 +35,7 @@ export const PerHeadMuonSimulator: React.FC = () => {
 
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 11px Outfit';
-      ctx.fillText(optimizerMode === 'full' ? 'Traditional Full-Matrix Muon Optimizer Update (Imbalanced)' : 'Kimi-K3 Per-Head Muon Optimizer Update (Perfect Equilibrium)', startX, 25);
+      ctx.fillText(optimizerMode === 'full' ? 'Full-Matrix Muon Update (illustrative comparison)' : 'Kimi-K3 Per-Head Muon Update (illustrative comparison)', startX, 25);
 
       // Draw 8 Attention Heads
       for (let i = 0; i < 8; i++) {
@@ -163,10 +163,10 @@ export const PerHeadMuonSimulator: React.FC = () => {
 
   return (
     <div className="tab-panel">
-      <div className="badge">Chapter 2.5 - Per-Head Muon Optimizer (Per-Head Orthogonalized Optimizer)</div>
+      <div className="badge">Chapter 2.8 - Per-Head Muon Optimizer (Per-Head Orthogonalized Optimizer)</div>
       <h2 style={{ color: '#FFFFFF', marginTop: '10px' }}>Per-Head Muon Matrix Parameter Optimizer</h2>
       <p style={{ color: '#94A3B8', fontSize: '1.08rem', marginBottom: '20px' }}>
-        Kimi-K3 replaces expensive standard second-order optimizers with Newton-Schulz iterations for parameter orthogonalization updates. <b>Per-head orthogonalization</b> prevents the head with the largest norm from starving other attention heads.
+        Kimi-K3 applies Muon to matrix parameters and partitions the Q/K/V momentum matrices by attention head before Newton-Schulz orthogonalization. The eight bars below are an illustration; the report specifies 96 attention heads but does not publish this toy gradient trace.
       </p>
 
       <div className="grid-2" style={{ gap: '20px' }}>
@@ -244,6 +244,20 @@ export const PerHeadMuonSimulator: React.FC = () => {
                     X_(k+1) = 0.5 * X_k * (3 * I - X_kᵀ * X_k)
                   </div>
                   Gradient steps are approximated via Newton-Schulz iteration, achieving rapid matrix orthogonalization to maintain smooth and uniform parameter distribution during backpropagation.
+                </div>
+                <div style={{ background: '#02040a', borderRadius: '6px', padding: '12px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                  <strong style={{ color: '#6EE7B7' }}>PyTorch-style minimal sketch</strong>
+                  <pre style={{ margin: '8px 0 0', color: '#CBD5E1', fontSize: '0.82rem', lineHeight: '1.5', overflowX: 'auto' }}>{`# Teaching sketch; not the unpublished K3 optimizer implementation.
+for head in range(num_heads):
+    X = momentum[head]
+    X = X / (X.norm() + 1e-6)
+    for _ in range(ns_steps):
+        X = 0.5 * X @ (3 * torch.eye(X.shape[-1]) - X.T @ X)
+    momentum[head] = X
+`}</pre>
+                  <small style={{ color: '#64748B', lineHeight: '1.45' }}>
+                    The key teaching point is the per-head partition: each head is orthogonalized independently before its matrix update.
+                  </small>
                 </div>
               </div>
             )}

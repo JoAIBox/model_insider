@@ -64,7 +64,7 @@ export const PreTrainingSection: React.FC = () => {
     { label: "Activated Parameters (Activated Params)", k2: "32.6 B", k3: "104.2 B", desc: "↑ 220% active size, increasing inference compute capacity per token." },
     { label: "MoE Latent Space (Latent MoE)", k2: "N/A", k3: "3,584-dim (0.5x)", desc: "Compresses feature dimensions before routing, cutting GPU network bandwidth in half." },
     { label: "Limit Context Length (Context)", k2: "128 K", k3: "1 M (1 Million)", desc: "↑ 800% limit leap, combined with constant KDA memory to sustain 1M context windows." },
-    { label: "Vision Encoder (ViT)", k2: "External SigLIP", k3: "401M Native MoonViT", desc: "Self-developed end-to-end native multimodal training, significantly increasing gradient stability." }
+    { label: "Vision Encoder Evolution (ViT)", k2: "Not specified in K3 comparison; K2.5: SigLIP-initialized", k3: "401M MoonViT-V2 (from scratch)", desc: "The K3 report leaves K2's ViT field unspecified, describes SigLIP initialization as prior K2.5 practice, and reports MoonViT-V2 as trained from scratch for K3." }
   ];
 
   // Handle Scaling Law SVG interactions
@@ -316,12 +316,12 @@ export const PreTrainingSection: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '10px' }}>
               <span style={{ color: '#FFF', fontSize: '0.9rem', fontWeight: 'bold' }}>{curriculumStages[activeStage].name}</span>
               <span style={{ color: '#10B981', fontSize: '1.02rem' }}>Parameter State: {curriculumStages[activeStage].params}</span>
-              <span style={{ color: '#FFB000', fontSize: '1.02rem' }}>Expected Loss: {curriculumStages[activeStage].loss}</span>
+              <span style={{ color: '#FFB000', fontSize: '1.02rem' }}>Illustrative Loss: {curriculumStages[activeStage].loss}</span>
             </div>
 
             {/* Custom Pie-like ratio bars representing data ratios */}
             <div style={{ fontSize: '1.02rem', color: '#94A3B8' }}>
-              <span style={{ color: '#E2E8F0', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>Data Allocation in this Training Phase:</span>
+              <span style={{ color: '#E2E8F0', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>Illustrative data mix (not published by the report):</span>
               
               <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
                 {curriculumStages[activeStage].ratios.map((ratio, idx) => (
@@ -367,11 +367,11 @@ export const PreTrainingSection: React.FC = () => {
             </div>
             <div style={{ background: '#090D16', padding: '10px', borderRadius: '6px' }}>
               <span style={{ color: '#10B981', fontWeight: 'bold' }}>Cosine Learning Rate Schedule (LR Cosine Schedule)</span>
-              <p style={{ color: '#94A3B8', marginTop: '4px' }}>Peaks at 3e⁻⁴, warm-up linearly over the first 1% of training steps.</p>
+              <p style={{ color: '#94A3B8', marginTop: '4px' }}>The report specifies cosine decay with a 1% linear warmup; peak learning rate is not disclosed here.</p>
             </div>
             <div style={{ background: '#090D16', padding: '10px', borderRadius: '6px' }}>
-              <span style={{ color: '#FFB000', fontWeight: 'bold' }}>Batch Size Schedule</span>
-              <p style={{ color: '#94A3B8', marginTop: '4px' }}>Grows automatically from 24M to 96M tokens as sequence length increases to maintain robust gradient distribution controls.</p>
+              <span style={{ color: '#FFB000', fontWeight: 'bold' }}>Weight Decay</span>
+              <p style={{ color: '#94A3B8', marginTop: '4px' }}>The report specifies weight decay 0.1 throughout training; batch-size values are not disclosed here.</p>
             </div>
           </div>
         </div>

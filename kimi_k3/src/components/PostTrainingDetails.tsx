@@ -90,7 +90,7 @@ export const PostTrainingDetails: React.FC = () => {
       <div className="badge">Chapter 4 - Post-Training Evolution</div>
       <h2 style={{ color: '#FFFFFF', marginTop: '10px' }}>Kimi-K3 Post-Training Reinforcement Learning & Alignment</h2>
       <p style={{ color: '#94A3B8', fontSize: '1.08rem', marginBottom: '20px' }}>
-        Kimi-K3 post-training integrates Multi-Objective Policy Distillation (MOPD) and asynchronous partial rollout mechanisms, greatly alleviating machine waiting deadlocks under distributed learning.
+        Kimi-K3 post-training integrates Multi-Teacher On-Policy Distillation (MOPD) and asynchronous partial rollout mechanisms, greatly alleviating machine waiting deadlocks under distributed learning.
       </p>
 
       {/* Sub-tab navigation */}
@@ -111,7 +111,7 @@ export const PostTrainingDetails: React.FC = () => {
           className={`btn ${subTab === 'taskSynth' ? 'active' : ''}`}
           onClick={() => setSubTab('taskSynth')}
         >
-          4.3 Multi-Mentor Distillation (MOPD) Structure
+          4.3 Multi-Teacher On-Policy Distillation (MOPD) Structure
         </button>
       </div>
 
@@ -237,36 +237,54 @@ export const PostTrainingDetails: React.FC = () => {
 
           {subTab === 'taskSynth' && (
             <div>
-              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>Three Expert Mentors Teaching One Student (MOPD Distillation Diagram)</h3>
+              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>Nine Teacher Configurations Teaching One Student (MOPD Distillation Diagram)</h3>
               
               <div style={{ background: '#02040a', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'center' }}>
-                <svg width="100%" height="220" viewBox="0 0 540 220" style={{ width: '100%' }}>
-                  {/* Teachers */}
-                  <rect x="20" y="20" width="140" height="50" rx="6" fill="#1E3A8A" stroke="#3B82F6" strokeWidth="1.5" />
-                  <text x="90" y="50" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">Math Mentor</text>
+                <svg width="100%" height="330" viewBox="0 0 700 330" style={{ width: '100%' }}>
+                  <text x="232" y="20" fill="#94A3B8" fontSize="12" fontWeight="bold" textAnchor="middle">Reasoning effort</text>
+                  <text x="225" y="38" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">Low</text>
+                  <text x="355" y="38" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">High</text>
+                  <text x="485" y="38" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">Max</text>
 
-                  <rect x="200" y="20" width="140" height="50" rx="6" fill="#064E3B" stroke="#10B981" strokeWidth="1.5" />
-                  <text x="270" y="50" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">Code Mentor</text>
+                  {/* 3 domains × 3 reasoning-effort levels = 9 teacher configurations */}
+                  <text x="20" y="68" fill="#3B82F6" fontSize="13" fontWeight="bold">Math domain</text>
+                  <text x="20" y="123" fill="#10B981" fontSize="13" fontWeight="bold">Code domain</text>
+                  <text x="20" y="178" fill="#F59E0B" fontSize="13" fontWeight="bold">General domain</text>
 
-                  <rect x="380" y="20" width="140" height="50" rx="6" fill="#78350F" stroke="#F59E0B" strokeWidth="1.5" />
-                  <text x="450" y="50" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">General Mentor</text>
+                  {[0, 1, 2].map((row) => [0, 1, 2].map((col) => {
+                    const x = 170 + col * 130;
+                    const y = 48 + row * 55;
+                    const colors = ['#1E3A8A', '#064E3B', '#78350F'];
+                    const borders = ['#3B82F6', '#10B981', '#F59E0B'];
+                    return (
+                      <g key={`${row}-${col}`}>
+                        <rect x={x} y={y} width="110" height="38" rx="5" fill={colors[row]} stroke={borders[row]} strokeWidth="1.5" />
+                        <text x={x + 55} y={y + 24} fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle">Teacher</text>
+                      </g>
+                    );
+                  }))}
 
-                  {/* Student */}
-                  <rect x="170" y="150" width="200" height="50" rx="6" fill="#312E81" stroke="#6366F1" strokeWidth="2" />
-                  <text x="270" y="180" fill="#FFF" fontSize="15" fontWeight="bold" textAnchor="middle">Student Model π_θ (K3)</text>
+                  {/* Compact routing bus keeps the nine sources visible without hiding their configuration. */}
+                  <path d="M 600 67 L 625 67 L 625 177" stroke="#38BDF8" strokeWidth="1.5" fill="none" />
+                  <path d="M 600 122 L 625 122" stroke="#38BDF8" strokeWidth="1.5" fill="none" />
+                  <path d="M 600 177 L 625 177" stroke="#38BDF8" strokeWidth="1.5" fill="none" />
+                  <path d="M 625 122 L 650 122 L 650 224 L 500 224" stroke="#38BDF8" strokeWidth="1.5" strokeDasharray="4,3" fill="none" />
+                  <text x="518" y="210" fill="#38BDF8" fontSize="11" textAnchor="middle">9 configurations</text>
 
-                  {/* Flow lines */}
-                  <path d="M 90 70 L 220 150" stroke="rgba(0, 242, 254, 0.4)" strokeWidth="1.5" strokeDasharray="4,3" fill="none" />
-                  <path d="M 270 70 L 270 150" stroke="rgba(0, 242, 254, 0.4)" strokeWidth="1.5" strokeDasharray="4,3" fill="none" />
-                  <path d="M 450 70 L 320 150" stroke="rgba(0, 242, 254, 0.4)" strokeWidth="1.5" strokeDasharray="4,3" fill="none" />
-                  
-                  <rect x="180" y="100" width="180" height="26" rx="4" fill="#070913" stroke="#38BDF8" strokeWidth="1" />
-                  <text x="270" y="117" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">MOPD Distillation Loss (Eq 15)</text>
+                  <rect x="220" y="210" width="280" height="30" rx="4" fill="#070913" stroke="#38BDF8" strokeWidth="1" />
+                  <text x="360" y="230" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">MOPD distillation loss (Eq 15)</text>
+
+                  <path d="M 360 240 L 360 270" stroke="rgba(0, 242, 254, 0.6)" strokeWidth="1.5" strokeDasharray="4,3" />
+                  <rect x="220" y="270" width="280" height="45" rx="6" fill="#312E81" stroke="#6366F1" strokeWidth="2" />
+                  <text x="360" y="297" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">Student model π_θ (K3)</text>
                 </svg>
               </div>
 
               <div style={{ fontSize: '1.02rem', color: '#94A3B8', marginTop: '12px', lineHeight: '1.4' }}>
-                💡 <b>MOPD Fusion:</b> 9 independent expert teacher models (trained on different data distributions and parameter sizes) continuously pass knowledge to a single lightweight student model. Utilizing **Stop-gradient** techniques prevents cross-teacher interference, allowing the student model to master the strengths of all mentors.
+                💡 <b>MOPD Fusion:</b> Nine teacher configurations — 3 domains × 3 reasoning-effort levels — continuously pass knowledge to a single student model. The 3×3 matrix makes each domain/effort configuration explicit; it does not imply nine different parameter sizes. Using <b>stop-gradient</b> techniques prevents cross-teacher interference, allowing the student model to learn complementary strengths.
+              </div>
+              <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '5px', background: 'rgba(56, 189, 248, 0.07)', border: '1px solid rgba(56, 189, 248, 0.2)', color: '#E2E8F0', fontFamily: 'monospace', fontSize: '0.92rem', textAlign: 'center' }}>
+                9 teacher policies → one MOPD loss → student π_θ (K3)
               </div>
             </div>
           )}
@@ -323,7 +341,7 @@ export const PostTrainingDetails: React.FC = () => {
             {showFormula && (
               <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div className="formula-box" style={{ fontSize: '1.15rem', lineHeight: '1.4' }}>
-                  <strong>Multi-Mentor Distillation (MOPD) Clipped Ratio Loss (Item 21 - Eq 15):</strong>
+                  <strong>Multi-Teacher On-Policy Distillation (MOPD) Clipped Ratio Loss (Item 21 - Eq 15):</strong>
                   <div style={{ fontFamily: 'monospace', color: '#10B981', margin: '4px 0' }}>
                     r_opd = clip( sg( log( π_teacher / π_student ) ), -R_max, R_max)
                   </div>
