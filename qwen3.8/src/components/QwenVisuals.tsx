@@ -21,9 +21,9 @@ const Arrow = ({ id, color = '#67e8f9' }: { id: string; color?: string }) => (
 
 const SvgNode = ({ x, y, width, title, detail, color = '#67e8f9', active = false }: { x: number; y: number; width: number; title: string; detail?: string; color?: string; active?: boolean }) => (
   <g className={active ? 'qwen-svg-node active' : 'qwen-svg-node'}>
-    <rect x={x} y={y} width={width} height="62" rx="9" fill={active ? `${color}25` : '#0e1421'} stroke={active ? color : `${color}55`} strokeWidth={active ? 2 : 1.2} />
-    <text x={x + width / 2} y={y + 27} textAnchor="middle" fill={active ? '#ffffff' : '#dbe7f5'} fontSize="13" fontWeight="700">{title}</text>
-    {detail && <text x={x + width / 2} y={y + 47} textAnchor="middle" fill={color} fontSize="10" fontFamily="monospace">{detail}</text>}
+    <rect x={x} y={y} width={width} height="70" rx="9" fill={active ? `${color}30` : '#0e1421'} stroke={active ? color : `${color}66`} strokeWidth={active ? 2.5 : 1.4} />
+    <text x={x + width / 2} y={y + 30} textAnchor="middle" fill={active ? '#ffffff' : '#f1f5f9'} fontSize="14.5" fontWeight="700">{title}</text>
+    {detail && <text x={x + width / 2} y={y + 52} textAnchor="middle" fill={color} fontSize="12" fontWeight="600" fontFamily="monospace">{detail}</text>}
   </g>
 );
 
@@ -205,81 +205,94 @@ export function ModelSignatureVisual({ model }: { model: QwenVisualModel; parame
       <div style={{ width: '100%', overflowX: 'auto', backgroundColor: '#070a12', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '18px 12px', marginBottom: '16px' }}>
         {/* 宏观视角标题 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '0 8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#cbd5e1', fontFamily: 'monospace' }}>
             🌐 全网 {model.layers} 层宏观拓扑流 (点击任意 Block 图形节点即可选择下钻):
           </span>
-          <span style={{ fontSize: '11px', color: accentColor, fontFamily: 'monospace' }}>
+          <span style={{ fontSize: '13px', color: accentColor, fontFamily: 'monospace' }}>
             当前下钻: <strong>Block #{selectedBlockIndex + 1} (Layer {l1Num} ~ Layer {l4Num})</strong>
           </span>
         </div>
 
         {/* 全网 Block 宏观矢量流 SVG (全图形化展现，非纯文本) */}
-        <svg viewBox={`0 0 ${Math.max(1100, model.cycleCount * 75 + 160)} 90`} width="100%" height="90" style={{ display: 'block' }}>
+        <svg viewBox={`0 0 ${Math.max(1150, model.cycleCount * 78 + 200)} 110`} width="100%" height="110" style={{ display: 'block' }}>
           <defs>
-            <marker id="macro-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-              <path d="M 0 1 L 9 5 L 0 9 z" fill={accentColor} />
+            <marker id="macro-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#10b981" />
             </marker>
           </defs>
 
+          {/* 全网残差长河绿色背景高亮通道 (Global Residual Stream Highway) */}
+          {(() => {
+            const totalW = 105 + model.cycleCount * 78 + 80;
+            return (
+              <g>
+                <path d={`M 50 49 L ${totalW - 40} 49`} stroke="#10b981" strokeWidth="4" opacity="0.3" strokeDasharray="8 4" />
+                <text x={totalW / 2} y="98" fill="#10b981" fontSize="10.5" fontWeight="bold" textAnchor="middle" fontFamily="monospace">
+                  🟢 贯穿全网 64 层的全量残差长河 (Global Continuous Residual Highway): h_0 → h_1 → ... → h_64
+                </text>
+              </g>
+            );
+          })()}
+
           {/* 输入 Embedding 节点 */}
           <g style={{ cursor: 'pointer' }} onClick={() => setSelectedNodeId('emb')}>
-            <rect x="10" y="20" width="70" height="50" rx="6" fill="#0e1421" stroke="#67e8f9" strokeWidth="1" />
-            <text x="45" y="42" fill="#67e8f9" fontSize="9" fontWeight="bold" textAnchor="middle">Embedding</text>
-            <text x="45" y="56" fill="#64748b" fontSize="7" textAnchor="middle">d={model.hidden}</text>
+            <rect x="10" y="20" width="80" height="58" rx="6" fill="#0e1421" stroke="#67e8f9" strokeWidth="1.2" />
+            <text x="50" y="44" fill="#67e8f9" fontSize="11" fontWeight="bold" textAnchor="middle">Embedding</text>
+            <text x="50" y="60" fill="#94a3b8" fontSize="9" textAnchor="middle">d={model.hidden}</text>
           </g>
 
-          <line x1="80" y1="45" x2="95" y2="45" stroke={accentColor} strokeWidth="1.5" markerEnd="url(#macro-arrow)" />
+          <line x1="90" y1="49" x2="105" y2="49" stroke="#10b981" strokeWidth="2.2" markerEnd="url(#macro-arrow)" />
 
           {/* 所有 Block 图形节点 (Block 1 至 Block N) */}
           {Array.from({ length: model.cycleCount }, (_, idx) => {
             const isSelected = selectedBlockIndex === idx;
-            const x = 95 + idx * 72;
+            const x = 105 + idx * 78;
             const startL = idx * 4 + 1;
             const endL = idx * 4 + 4;
             return (
               <g key={idx} style={{ cursor: 'pointer' }} onClick={() => setSelectedBlockIndex(idx)}>
                 {/* Block 外框卡片 */}
-                <rect x={x} y="15" width="62" height="60" rx="6"
-                  fill={isSelected ? `${accentColor}30` : '#0e1421'}
-                  stroke={isSelected ? accentColor : 'rgba(255,255,255,0.12)'}
-                  strokeWidth={isSelected ? 2 : 1} />
+                <rect x={x} y="15" width="68" height="68" rx="7"
+                  fill={isSelected ? `${accentColor}35` : '#0e1421'}
+                  stroke={isSelected ? accentColor : 'rgba(255,255,255,0.15)'}
+                  strokeWidth={isSelected ? 2.5 : 1} />
 
                 {/* Block 内部 4 层颜色点柱标示 */}
-                <rect x={x + 6} y="22" width="10" height="18" rx="2" fill="#67e8f9" opacity={isSelected ? 0.9 : 0.6} />
-                <rect x={x + 19} y="22" width="10" height="18" rx="2" fill="#67e8f9" opacity={isSelected ? 0.9 : 0.6} />
-                <rect x={x + 32} y="22" width="10" height="18" rx="2" fill="#67e8f9" opacity={isSelected ? 0.9 : 0.6} />
-                <rect x={x + 45} y="22" width="10" height="18" rx="2" fill="#c4b5fd" opacity={isSelected ? 0.9 : 0.6} />
+                <rect x={x + 6} y="22" width="11" height="22" rx="2" fill="#67e8f9" opacity={isSelected ? 1 : 0.65} />
+                <rect x={x + 20} y="22" width="11" height="22" rx="2" fill="#67e8f9" opacity={isSelected ? 1 : 0.65} />
+                <rect x={x + 34} y="22" width="11" height="22" rx="2" fill="#67e8f9" opacity={isSelected ? 1 : 0.65} />
+                <rect x={x + 48} y="22" width="11" height="22" rx="2" fill="#c4b5fd" opacity={isSelected ? 1 : 0.65} />
 
-                <text x={x + 31} y="51" fill={isSelected ? '#ffffff' : '#94a3b8'} fontSize="8" fontWeight="bold" textAnchor="middle">
+                <text x={x + 34} y="55" fill={isSelected ? '#ffffff' : '#cbd5e1'} fontSize="10" fontWeight="bold" textAnchor="middle">
                   B#{idx + 1}
                 </text>
-                <text x={x + 31} y="64" fill={isSelected ? accentColor : '#64748b'} fontSize="7" textAnchor="middle">
+                <text x={x + 34} y="71" fill={isSelected ? accentColor : '#94a3b8'} fontSize="9" textAnchor="middle">
                   L{startL}-{endL}
                 </text>
 
-                {/* 连接下一个 Block 的箭头 */}
-                <line x1={x + 62} y1="45" x2={x + 72} y2="45" stroke={accentColor} strokeWidth="1.2" markerEnd="url(#macro-arrow)" />
+                {/* 残差长河直接穿透连接下一个 Block 的箭头 */}
+                <line x1={x + 68} y1="49" x2={x + 78} y2="49" stroke="#10b981" strokeWidth="2" markerEnd="url(#macro-arrow)" />
               </g>
             );
           })}
 
           {/* 输出 LM Head 节点 */}
           {(() => {
-            const headX = 95 + model.cycleCount * 72;
+            const headX = 105 + model.cycleCount * 78;
             return (
               <g style={{ cursor: 'pointer' }} onClick={() => setSelectedNodeId('head')}>
-                <rect x={headX} y="20" width="70" height="50" rx="6" fill="#0e1421" stroke="#fbbf24" strokeWidth="1" />
-                <text x={headX + 35} y="42" fill="#fbbf24" fontSize="9" fontWeight="bold" textAnchor="middle">LM Head</text>
-                <text x={headX + 35} y="56" fill="#64748b" fontSize="7" textAnchor="middle">151.9K Logits</text>
+                <rect x={headX} y="20" width="80" height="58" rx="6" fill="#0e1421" stroke="#fbbf24" strokeWidth="1.2" />
+                <text x={headX + 40} y="44" fill="#fbbf24" fontSize="11" fontWeight="bold" textAnchor="middle">LM Head</text>
+                <text x={headX + 40} y="60" fill="#94a3b8" fontSize="9" textAnchor="middle">151.9K Logits</text>
               </g>
             );
           })()}
         </svg>
       </div>
 
-      {/* 神经网络架构绘图 (适配宽度的 SVG) */}
+      {/* 神经网络架构下钻解剖图 (适配宽度的 SVG) */}
       <div style={{ width: '100%', overflowX: 'auto', backgroundColor: '#070a12', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)', padding: '16px 8px' }}>
-        <svg viewBox="0 0 1100 240" width="100%" height="240" style={{ display: 'block' }}>
+        <svg viewBox="0 0 1150 260" width="100%" height="260" style={{ display: 'block' }}>
           <defs>
             <marker id="arch-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
               <path d="M 0 1 L 9 5 L 0 9 z" fill={accentColor} />
@@ -294,99 +307,170 @@ export function ModelSignatureVisual({ model }: { model: QwenVisualModel; parame
             onClick={() => setSelectedNodeId('emb')}
             onMouseEnter={(e) => handleMouseEnter(nodes[0], e)}
             onMouseLeave={handleMouseLeave}>
-            <rect x="20" y="80" width="110" height="70" rx="8"
+            <rect x="15" y="65" width="130" height="105" rx="8"
               fill={selectedNodeId === 'emb' ? 'rgba(103,232,249,0.25)' : '#0e1421'}
-              stroke="#67e8f9" strokeWidth={selectedNodeId === 'emb' ? 2.5 : 1} />
-            <text x="75" y="108" fill="#67e8f9" fontSize="11" fontWeight="bold" textAnchor="middle">输入嵌入</text>
-            <text x="75" y="126" fill="#94a3b8" fontSize="9" textAnchor="middle">{isFlash ? 'N-gram + Base' : 'Token + Vision'}</text>
-            <text x="75" y="140" fill="#64748b" fontSize="8" fontFamily="monospace" textAnchor="middle">d={model.hidden}</text>
+              stroke="#67e8f9" strokeWidth={selectedNodeId === 'emb' ? 2.5 : 1.2} />
+            <text x="80" y="90" fill="#67e8f9" fontSize="12" fontWeight="bold" textAnchor="middle">输入嵌入 (Embedding)</text>
+            <text x="80" y="110" fill="#cbd5e1" fontSize="10" textAnchor="middle">{isFlash ? 'N-gram + Base' : 'Token + Vision'}</text>
+            {/* 维度标注 */}
+            <rect x="22" y="123" width="116" height="28" rx="4" fill="#070a12" stroke="rgba(103,232,249,0.4)" />
+            <text x="80" y="141" fill="#67e8f9" fontSize="9.5" fontWeight="bold" fontFamily="monospace" textAnchor="middle">
+              In:[B,T] → Out:[B,T,D]
+            </text>
           </g>
 
-          <line x1="130" y1="115" x2="165" y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
+          <line x1="145" y1="115" x2="170" y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
 
           {/* 所选 Block (包含动态 4 层算子) */}
-          <rect x="170" y="25" width="750" height="185" rx="12"
+          <rect x="170" y="20" width="795" height="205" rx="12"
             fill="rgba(255,255,255,0.02)" stroke={`${accentColor}55`} strokeWidth="1.5" strokeDasharray="6 4" />
-          <text x="185" y="45" fill={accentColor} fontSize="11" fontWeight="bold" fontFamily="monospace">
+          <text x="185" y="44" fill={accentColor} fontSize="12" fontWeight="bold" fontFamily="monospace">
             当前下钻周期: Block #{selectedBlockIndex + 1} / {model.cycleCount}（包含 Layer {l1Num} ~ Layer {l4Num}）
           </text>
 
-          {/* 周期内部 4 个动态算子层 */}
+          {/* 周期内部 4 个动态算子层及每个子层的独立残差连接 */}
           {[
-            { node: nodes[1], label: 'GDN #1', color: '#67e8f9', x: 185, type: 'gdn-1', layerNum: l1Num },
-            { node: nodes[2], label: 'GDN #2', color: '#67e8f9', x: 310, type: 'gdn-2', layerNum: l2Num },
-            { node: nodes[3], label: 'GDN #3', color: '#67e8f9', x: 435, type: 'gdn-3', layerNum: l3Num },
-            { node: nodes[4], label: model.cycleAttention, color: '#c4b5fd', x: 560, type: 'attn-4', layerNum: l4Num },
+            { node: nodes[1], label: 'GDN #1', color: '#67e8f9', x: 180, type: 'gdn-1', layerNum: l1Num },
+            { node: nodes[2], label: 'GDN #2', color: '#67e8f9', x: 315, type: 'gdn-2', layerNum: l2Num },
+            { node: nodes[3], label: 'GDN #3', color: '#67e8f9', x: 450, type: 'gdn-3', layerNum: l3Num },
+            { node: nodes[4], label: model.cycleAttention, color: '#c4b5fd', x: 585, type: 'attn-4', layerNum: l4Num },
           ].map((item, idx) => {
             const isSel = selectedNodeId === item.type;
+            const subX = item.x;
             return (
-              <g key={idx} style={{ cursor: 'pointer' }}
-                onClick={() => setSelectedNodeId(item.type)}
-                onMouseEnter={(e) => handleMouseEnter(item.node, e)}
-                onMouseLeave={handleMouseLeave}>
-                <rect x={item.x} y="75" width="105" height="80" rx="8"
-                  fill={isSel ? `${item.color}30` : '#0e1421'}
-                  stroke={item.color} strokeWidth={isSel ? 2.5 : 1} />
-                <text x={item.x + 52} y={102} fill={item.color} fontSize="11" fontWeight="bold" textAnchor="middle">
-                  Layer {item.layerNum}
-                </text>
-                <text x={item.x + 52} y={120} fill="#fff" fontSize="10" fontWeight="bold" textAnchor="middle">
-                  {item.label}
-                </text>
-                <text x={item.x + 52} y={140} fill="#94a3b8" fontSize="8" textAnchor="middle">
-                  {idx < 3 ? 'O(1) 线性' : (isFlash ? 'QSA 块稀疏' : '全局锚点')}
-                </text>
+              <g key={idx}>
+                {/* 算子层主体卡片 */}
+                <g style={{ cursor: 'pointer' }}
+                  onClick={() => setSelectedNodeId(item.type)}
+                  onMouseEnter={(e) => handleMouseEnter(item.node, e)}
+                  onMouseLeave={handleMouseLeave}>
+                  <rect x={subX} y="62" width="120" height="110" rx="8"
+                    fill={isSel ? `${item.color}30` : '#0e1421'}
+                    stroke={item.color} strokeWidth={isSel ? 2.5 : 1.2} />
+                  <text x={subX + 60} y={85} fill={item.color} fontSize="12" fontWeight="bold" textAnchor="middle">
+                    Layer {item.layerNum}
+                  </text>
+                  <text x={subX + 60} y={105} fill="#fff" fontSize="11" fontWeight="bold" textAnchor="middle">
+                    {item.label}
+                  </text>
+                  <text x={subX + 60} y={123} fill="#cbd5e1" fontSize="9.5" textAnchor="middle">
+                    {idx < 3 ? 'O(1) 状态矩阵' : (isFlash ? 'QSA 块稀疏' : '全局 KV 锚点')}
+                  </text>
 
-                {/* 连线箭头 */}
+                  {/* 维度标注 */}
+                  <rect x={subX + 6} y="133" width="108" height="26" rx="4" fill="#070a12" stroke={`${item.color}50`} />
+                  <text x={subX + 60} y={150} fill={item.color} fontSize="9.5" fontWeight="bold" fontFamily="monospace" textAnchor="middle">
+                    [B,T,D] → [B,T,D]
+                  </text>
+                </g>
+
+                {/* 该子层的独立 Pre-LN 残差跳跃弧线 (SubLayer Skip Arc) */}
+                <path d={`M ${subX - 10} 115 C ${subX - 5} 190, ${subX + 125} 190, ${subX + 127} 122`}
+                  fill="none" stroke="#10b981" strokeWidth="1.6" strokeDasharray="4 3" />
+                <circle cx={subX + 127} cy="115" r="7" fill="#070a12" stroke="#10b981" strokeWidth="1.8" />
+                <text x={subX + 127} y="119" fill="#10b981" fontSize="11" fontWeight="bold" textAnchor="middle">+</text>
+
+                {/* 连线箭头到下一个节点 */}
                 {idx < 3 && (
-                  <line x1={item.x + 105} y1="115" x2={item.x + 125} y2="115" stroke={accentColor} strokeWidth="1.8" markerEnd="url(#arch-arrow)" />
+                  <line x1={subX + 134} y1="115" x2={subX + 135} y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
                 )}
               </g>
             );
           })}
 
-          <line x1="665" y1="115" x2="695" y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
+          <line x1="719" y1="115" x2="730" y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
 
           {/* FFN / MoE 层 */}
           <g style={{ cursor: 'pointer' }}
             onClick={() => setSelectedNodeId('ffn')}
             onMouseEnter={(e) => handleMouseEnter(nodes[5], e)}
             onMouseLeave={handleMouseLeave}>
-            <rect x={700} y={70} width="200" height="90" rx="10"
+            <rect x="730" y="58" width="215" height="115" rx="10"
               fill={selectedNodeId === 'ffn' ? 'rgba(251,191,36,0.25)' : '#0e1421'}
-              stroke="#fbbf24" strokeWidth={selectedNodeId === 'ffn' ? 2.5 : 1.2} />
-            <text x="800" y="98" fill="#fbbf24" fontSize="12" fontWeight="bold" textAnchor="middle">
+              stroke="#fbbf24" strokeWidth={selectedNodeId === 'ffn' ? 2.5 : 1.4} />
+            <text x="837" y="83" fill="#fbbf24" fontSize="12" fontWeight="bold" textAnchor="middle">
               {model.isMoe ? 'MoE 前馈神经网络' : 'Dense SwiGLU FFN'}
             </text>
-            <text x="800" y="120" fill="#fff" fontSize="10" textAnchor="middle">
-              {model.isMoe ? '512 专家网格' : '中间维度 17,408'}
+            <text x="837" y="103" fill="#fff" fontSize="11" textAnchor="middle">
+              {model.isMoe ? '512 专家 Pool (10+1 激活)' : '中间通道 17,408'}
             </text>
-            <text x="800" y="142" fill="#94a3b8" fontSize="9" fontFamily="monospace" textAnchor="middle">
-              {model.isMoe ? '10 路由 + 1 共享专家' : '每层独立前向思考'}
+            <text x="837" y="121" fill="#cbd5e1" fontSize="9.5" textAnchor="middle">
+              {model.isMoe ? '通道特征分发与融合' : '每层独立前向通道思考'}
+            </text>
+
+            {/* 维度标注 */}
+            <rect x="740" y="133" width="195" height="26" rx="4" fill="#070a12" stroke="rgba(251,191,36,0.5)" />
+            <text x="837" y="150" fill="#fbbf24" fontSize="9.5" fontWeight="bold" fontFamily="monospace" textAnchor="middle">
+              {model.isMoe ? `In:[B,T,D] → 10×2K → Out:[B,T,D]` : `In:[B,T,D] → [B,T,17.4K] → Out:[B,T,D]`}
             </text>
           </g>
 
-          {/* 残差连接 Skip Connection 线条 */}
-          <path d="M 175 160 C 175 200, 915 200, 915 160" fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5 4" />
-          <text x="545" y="195" fill="#10b981" fontSize="9" textAnchor="middle" fontFamily="monospace">
-            残差连接公路 (Residual Skip Connection: h_out = h_in + SubLayer(h))
+          {/* FFN 子层的 Pre-LN 残差跳跃弧线 */}
+          <path d="M 720 115 C 725 190, 945 190, 947 122" fill="none" stroke="#10b981" strokeWidth="1.6" strokeDasharray="4 3" />
+          <circle cx="947" cy="115" r="7" fill="#070a12" stroke="#10b981" strokeWidth="1.8" />
+          <text x="947" y="119" fill="#10b981" fontSize="11" fontWeight="bold" textAnchor="middle">+</text>
+
+          {/* 残差说明底标 */}
+          <text x="565" y="214" fill="#10b981" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">
+            {'🟢 绿虚线标示：每个子层 (SubLayer) 均拥有独立的 Pre-LN 残差连接加和节点: h_out = h_in + SubLayer(RMSNorm(h_in))'}
           </text>
 
-          <line x1="920" y1="115" x2="955" y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
+          <line x1="954" y1="115" x2="975" y2="115" stroke={accentColor} strokeWidth="2" markerEnd="url(#arch-arrow)" />
 
           {/* 输出 LM Head */}
           <g style={{ cursor: 'pointer' }}
             onClick={() => setSelectedNodeId('head')}
             onMouseEnter={(e) => handleMouseEnter(nodes[6], e)}
             onMouseLeave={handleMouseLeave}>
-            <rect x="960" y="80" width="120" height="70" rx="8"
+            <rect x="980" y="65" width="150" height="105" rx="8"
               fill={selectedNodeId === 'head' ? 'rgba(251,191,36,0.25)' : '#0e1421'}
-              stroke="#fbbf24" strokeWidth={selectedNodeId === 'head' ? 2.5 : 1} />
-            <text x="1020" y="108" fill="#fbbf24" fontSize="11" fontWeight="bold" textAnchor="middle">LM Head</text>
-            <text x="1020" y="126" fill="#94a3b8" fontSize="9" textAnchor="middle">151.9K 词表映射</text>
-            <text x="1020" y="140" fill="#64748b" fontSize="8" fontFamily="monospace" textAnchor="middle">Softmax Logits</text>
+              stroke="#fbbf24" strokeWidth={selectedNodeId === 'head' ? 2.5 : 1.2} />
+            <text x="1055" y="90" fill="#fbbf24" fontSize="12" fontWeight="bold" textAnchor="middle">LM Head</text>
+            <text x="1055" y="110" fill="#cbd5e1" fontSize="10" textAnchor="middle">151.9K 词表 Softmax</text>
+            {/* 维度标注 */}
+            <rect x="988" y="123" width="134" height="28" rx="4" fill="#070a12" stroke="rgba(251,191,36,0.5)" />
+            <text x="1055" y="141" fill="#fbbf24" fontSize="9" fontWeight="bold" fontFamily="monospace" textAnchor="middle">
+              In:[B,T,D] → Out:[B,T,V=151.9K]
+            </text>
           </g>
         </svg>
+      </div>
+
+      {/* 📐 维度符号含义全解与参数映射对照卡片 */}
+      <div style={{ marginTop: '14px', backgroundColor: '#070a12', borderRadius: '10px', padding: '14px 18px', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#67e8f9', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>📐 张量维度符号含义与模型实际数值对照 (Tensor Dimensions Legend)</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '11px', color: '#cbd5e1' }}>
+          <div style={{ backgroundColor: '#0e1421', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: '#67e8f9', fontWeight: 'bold', fontFamily: 'monospace' }}>B (Batch Size)</span>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>输入批次大小（推理阶段通常 $B = 1$）。</div>
+          </div>
+          <div style={{ backgroundColor: '#0e1421', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: '#67e8f9', fontWeight: 'bold', fontFamily: 'monospace' }}>T (Sequence Length)</span>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>输入/生成序列的 Token 数量（长文本最高 1M）。</div>
+          </div>
+          <div style={{ backgroundColor: '#0e1421', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: '#c4b5fd', fontWeight: 'bold', fontFamily: 'monospace' }}>D (Hidden Dim)</span>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>
+              骨干网主干隐藏层维度：<strong>d = {model.hidden}</strong>。
+            </div>
+          </div>
+          <div style={{ backgroundColor: '#0e1421', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: '#67e8f9', fontWeight: 'bold', fontFamily: 'monospace' }}>S ∈ ℝ¹²⁸ˣ¹²⁸ (GDN State)</span>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>GDN 递归记忆矩阵，保持 O(1) 不随 T 增长。</div>
+          </div>
+          <div style={{ backgroundColor: '#0e1421', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: '#fbbf24', fontWeight: 'bold', fontFamily: 'monospace' }}>d_ffn (FFN Intermediate)</span>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>
+              {model.isMoe ? 'MoE 专家激活: 10 路由 (2K) + 1 共享 (2K)' : 'SwiGLU 中间升维维度: 17,408'}。
+            </div>
+          </div>
+          <div style={{ backgroundColor: '#0e1421', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: '#fbbf24', fontWeight: 'bold', fontFamily: 'monospace' }}>V (Vocab Size)</span>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>词表 Logits 输出维度：<strong>V = 151,936</strong>。</div>
+          </div>
+        </div>
       </div>
 
       {/* 悬浮提示框 (Tooltip) */}

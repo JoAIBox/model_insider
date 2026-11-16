@@ -42,6 +42,11 @@ export const KDASimulator: React.FC = () => {
     });
   };
 
+  const handleStepRef = useRef(handleStep);
+  useEffect(() => {
+    handleStepRef.current = handleStep;
+  });
+
   const updateWhiteboard = (idx: number) => {
     const currentItems = whiteboardRef.current;
 
@@ -98,11 +103,11 @@ export const KDASimulator: React.FC = () => {
     let intervalId: number;
     if (isPlaying) {
       intervalId = window.setInterval(() => {
-        handleStep();
+        handleStepRef.current();
       }, 800);
     }
     return () => clearInterval(intervalId);
-  }, [isPlaying, alpha]);
+  }, [isPlaying]);
 
   // Canvas drawing effect
   useEffect(() => {

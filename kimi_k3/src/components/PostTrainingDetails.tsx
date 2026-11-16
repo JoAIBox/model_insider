@@ -1,32 +1,188 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { MOPD_TEACHER_DOMAINS, MOPD_EFFORT_LEVELS } from '../data/k3Specs';
+
+// Worker Slot representing a physical worker running a rollout trajectory
+interface WorkerSlot {
+  slotId: number;
+  trajId: string;
+  promptId: number;
+  rolloutK: number;
+  progress: number;
+  speed: number;
+  status: 'running' | 'paused' | 'completed' | 'consumed';
+  policyVersion: number;
+}
+
+// Completed item in the result pool
+interface CompletedResult {
+  trajId: string;
+  promptId: number;
+  rolloutK: number;
+  policyVersion: number;
+}
 
 export const PostTrainingDetails: React.FC = () => {
   const [subTab, setSubTab] = useState<'rlRollout' | 'speculative' | 'taskSynth'>('rlRollout');
-  const [lambdaVal, setLambdaVal] = useState<number>(0.8);
+  const [lambdaVal, setLambdaVal] = useState<number>(0.75); // 75% completion threshold
   const [showFormula, setShowFormula] = useState<boolean>(false);
 
-  // Partial rollout animation state
-  const [rolloutTime, setRolloutTime] = useState<number>(0);
+  // MOPD interactive state
+  const [selectedDomain, setSelectedDomain] = useState<string>('general_agents');
+  const [selectedEffort, setSelectedEffort] = useState<string>('high');
+
+  // Policy version tracking
+  const [policyVersion, setPolicyVersion] = useState<number>(1);
+  const [nextPromptCounter, setNextPromptCounter] = useState<number>(5); // P1..P4 initially
+  const [nextTrajCounter, setNextTrajCounter] = useState<number>(17);
+
+  // Completed results pool & consumed groups log
+  const [completedPool, setCompletedPool] = useState<Record<number, CompletedResult[]>>({});
+  const [consumedPromptIds, setConsumedPromptIds] = useState<number[]>([]);
+
+  // Initial 16 worker slots (4 prompts x 4 rollouts)
+  const initialSlots = (): WorkerSlot[] => {
+    return Array.from({ length: 16 }, (_, idx) => {
+      const promptId = Math.floor(idx / 4) + 1;
+      const rolloutK = (idx % 4) + 1;
+      // Stagger speeds: some fast (prompts 1 & 2), some slower stragglers (prompts 3 & 4)
+      const speed = 1.2 + ((idx * 7) % 11) * 0.28;
+      return {
+        slotId: idx,
+        trajId: `T-${idx + 1}`,
+        promptId,
+        rolloutK,
+        progress: 0,
+        speed,
+        status: 'running',
+        policyVersion: 1
+      };
+    });
+  };
+
+  const [workerSlots, setWorkerSlots] = useState<WorkerSlot[]>(initialSlots);
   const [isRolloutRunning, setIsRolloutRunning] = useState<boolean>(true);
+
+  // Compute active batch completion metrics
+  const activeCompletedCount = workerSlots.filter(s => s.status === 'completed').length;
+  const targetThreshold = Math.ceil(16 * lambdaVal);
+  const thresholdReached = activeCompletedCount >= targetThreshold;
+
+  // Prompts that currently have all K=4 rollouts completed in the pool
+  const readyPromptIds = Object.keys(completedPool)
+    .map(Number)
+    .filter(pId => !consumedPromptIds.includes(pId) && (completedPool[pId]?.length || 0) >= 4);
+
+  // Simulation step function
+  const stepSimulation = useCallback(() => {
+    setWorkerSlots(prev => {
+      const currentCompleted = prev.filter(s => s.status === 'completed').length;
+      if (currentCompleted >= targetThreshold) {
+        // Pause all incomplete workers once threshold is reached
+        return prev.map(s => s.status === 'running' ? { ...s, status: 'paused' } : s);
+      }
+
+      return prev.map(s => {
+        if (s.status !== 'running') return s;
+        const nextProg = Math.min(100, s.progress + s.speed * 2.5);
+        if (nextProg >= 100) {
+          // Record to completed pool if not already present
+          setCompletedPool(pool => {
+            const existing = pool[s.promptId] || [];
+            if (!existing.some(item => item.trajId === s.trajId)) {
+              return {
+                ...pool,
+                [s.promptId]: [
+                  ...existing,
+                  { trajId: s.trajId, promptId: s.promptId, rolloutK: s.rolloutK, policyVersion: s.policyVersion }
+                ]
+              };
+            }
+            return pool;
+          });
+          return {
+            ...s,
+            progress: 100,
+            status: 'completed'
+          };
+        }
+        return { ...s, progress: nextProg };
+      });
+    });
+  }, [targetThreshold]);
+
+  // Rollout simulation loop
+  useEffect(() => {
+    if (!isRolloutRunning) return;
+    const timer = window.setInterval(stepSimulation, 100);
+    return () => clearInterval(timer);
+  }, [isRolloutRunning, stepSimulation]);
+
+  // Action: Optimize complete groups and resume paused stragglers (R03 fix)
+  const handleOptimizeAndResume = () => {
+    if (readyPromptIds.length === 0 && !thresholdReached) return;
+
+    // 1. Mark complete prompt groups as consumed and advance policy version
+    const newlyConsumed = [...readyPromptIds];
+    setConsumedPromptIds(prev => [...prev, ...newlyConsumed]);
+    const nextVer = newlyConsumed.length > 0 ? policyVersion + 1 : policyVersion;
+    if (newlyConsumed.length > 0) {
+      setPolicyVersion(nextVer);
+    }
+
+    // 2. Update worker slots:
+    // - For slots whose prompt was consumed: assign a NEW prompt with new IDs and 0% progress
+    // - For slots whose prompt is incomplete (stragglers): RESUME FROM PAUSED PROGRESS (do NOT reset!)
+    setWorkerSlots(prev => {
+      const promptAssignCounter = nextPromptCounter;
+      let trajAssignCounter = nextTrajCounter;
+
+      const newSlots = prev.map(s => {
+        if (newlyConsumed.includes(s.promptId)) {
+          // This slot belonged to a consumed prompt group -> assign next new prompt
+          // Group of 4 slots gets the same new promptId
+          const newPromptId = promptAssignCounter;
+          const newTrajId = `T-${trajAssignCounter++}`;
+          return {
+            ...s,
+            trajId: newTrajId,
+            promptId: newPromptId,
+            progress: 0,
+            status: 'running' as const,
+            speed: 1.0 + ((s.slotId * 5) % 9) * 0.3,
+            policyVersion: nextVer
+          };
+        } else if (s.status === 'paused') {
+          // Resumed straggler continues from exact paused progress!
+          return {
+            ...s,
+            status: 'running' as const
+          };
+        }
+        return s;
+      });
+
+      if (newlyConsumed.length > 0) {
+        setNextPromptCounter(c => c + newlyConsumed.length);
+        setNextTrajCounter(trajAssignCounter);
+      }
+      return newSlots;
+    });
+
+    setIsRolloutRunning(true);
+  };
+
+  const handleResetRollout = () => {
+    setWorkerSlots(initialSlots());
+    setCompletedPool({});
+    setConsumedPromptIds([]);
+    setPolicyVersion(1);
+    setNextPromptCounter(5);
+    setNextTrajCounter(17);
+    setIsRolloutRunning(true);
+  };
 
   // Speculative decoding Gantt animation state
   const [specTick, setSpecTick] = useState<number>(0);
-
-  // Animation ticks
-  useEffect(() => {
-    let timerId: number;
-    if (isRolloutRunning) {
-      timerId = window.setInterval(() => {
-        setRolloutTime(prev => {
-          if (prev >= 120) {
-            return 0; // loop
-          }
-          return prev + 2;
-        });
-      }, 50);
-    }
-    return () => clearInterval(timerId);
-  }, [isRolloutRunning]);
 
   useEffect(() => {
     const timerId = window.setInterval(() => {
@@ -35,16 +191,11 @@ export const PostTrainingDetails: React.FC = () => {
     return () => clearInterval(timerId);
   }, []);
 
-  // Speculative decoding Gantt blocks rendering helpers
   const getGanttBlocks = () => {
-    // 3 phases:
-    // Phase 1 (0-10 ticks): Draft generating steps 1 to 4
-    // Phase 2 (10-18 ticks): Target parallel verification
-    // Phase 3 (18-30 ticks): Verification result (accept/reject) & output
     if (specTick < 10) {
       return {
         phase: "Draft Generation",
-        desc: "Draft model (EAGLE-3) is autoregressively pre-generating 4 tokens sequentially...",
+        desc: "Draft model (EAGLE-3) pre-generates 4 speculative tokens sequentially...",
         blocks: [
           { name: "Draft T1", color: '#10B981', w: 30, x: 20 },
           { name: "Draft T2", color: '#10B981', w: 30, x: 55 },
@@ -55,7 +206,7 @@ export const PostTrainingDetails: React.FC = () => {
     } else if (specTick < 18) {
       return {
         phase: "Target Verification",
-        desc: "Target model (Kimi-K3) is validating these 4 tokens in parallel at once...",
+        desc: "Target model (Kimi-K3) validates all 4 draft tokens in parallel in a single forward pass...",
         blocks: [
           { name: "Draft T1", color: '#059669', w: 30, x: 20 },
           { name: "Draft T2", color: '#059669', w: 30, x: 55 },
@@ -66,8 +217,8 @@ export const PostTrainingDetails: React.FC = () => {
       };
     } else {
       return {
-        phase: "Acceptance / Backtrack",
-        desc: "3 tokens accepted, 4th token rejected. Keeping the first 3 and rolling back/correcting, significantly accelerating inference!",
+        phase: "Acceptance & Prefix Restoration",
+        desc: "3 tokens accepted; 4th rejected. Validated prefix is preserved; target model resumes without leaking rejected draft state.",
         blocks: [
           { name: "Accept ✅", color: '#10B981', w: 30, x: 20 },
           { name: "Accept ✅", color: '#10B981', w: 30, x: 55 },
@@ -81,37 +232,41 @@ export const PostTrainingDetails: React.FC = () => {
 
   const ganttInfo = getGanttBlocks();
 
-  // Partial rollout calculation
-  const totalTraj = 120;
-  const completedTraj = Math.round(totalTraj * lambdaVal);
+  // Helper for teacher button short codes to avoid T_gene collision
+  const getDomainShortCode = (domId: string) => {
+    if (domId === 'general_tasks') return 'T_task';
+    if (domId === 'general_agents') return 'T_agent';
+    if (domId === 'coding_agents') return 'T_code';
+    return 'T_spec';
+  };
 
   return (
     <div className="tab-panel">
       <div className="badge">Chapter 4 - Post-Training Evolution</div>
-      <h2 style={{ color: '#FFFFFF', marginTop: '10px' }}>Kimi-K3 Post-Training Reinforcement Learning & Alignment</h2>
+      <h2 style={{ color: '#FFFFFF', marginTop: '10px' }}>Kimi-K3 Post-Training Reinforcement Learning &amp; Alignment</h2>
       <p style={{ color: '#94A3B8', fontSize: '1.08rem', marginBottom: '20px' }}>
-        Kimi-K3 post-training integrates Multi-Teacher On-Policy Distillation (MOPD) and asynchronous partial rollout mechanisms, greatly alleviating machine waiting deadlocks under distributed learning.
+        Kimi-K3 post-training integrates Multi-Teacher On-Policy Distillation (MOPD) and asynchronous partial rollout mechanisms, eliminating straggler waiting deadlocks across distributed GPU clusters.
       </p>
 
       {/* Sub-tab navigation */}
-      <div className="control-panel" style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+      <div className="control-panel" style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
         <button 
           className={`btn ${subTab === 'rlRollout' ? 'active' : ''}`}
           onClick={() => setSubTab('rlRollout')}
         >
-          4.1 Asynchronous Partial Rollout Mechanism
+          4.1 Asynchronous Partial Rollout (Worker Lifecycle)
         </button>
         <button 
           className={`btn ${subTab === 'speculative' ? 'active' : ''}`}
           onClick={() => setSubTab('speculative')}
         >
-          4.2 Cascaded Feature Fusion & Speculative Draft
+          4.2 Cascaded Feature Fusion &amp; Speculative Draft
         </button>
         <button 
           className={`btn ${subTab === 'taskSynth' ? 'active' : ''}`}
           onClick={() => setSubTab('taskSynth')}
         >
-          4.3 Multi-Teacher On-Policy Distillation (MOPD) Structure
+          4.3 Multi-Teacher On-Policy Distillation (MOPD)
         </button>
       </div>
 
@@ -120,13 +275,21 @@ export const PostTrainingDetails: React.FC = () => {
         {/* Left Column: Dynamic Visualizations */}
         <div className="card">
           
+          {/* SUB-TAB 4.1: ASYNCHRONOUS PARTIAL ROLLOUT */}
           {subTab === 'rlRollout' && (
             <div>
-              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>⚡ Asynchronous Sampling Timeline Comparison (Full vs. Partial Rollout)</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', margin: 0 }}>
+                  ⚡ Asynchronous Partial Rollout (Sample Lifecycle &amp; Queue)
+                </h3>
+                <span style={{ color: '#38BDF8', fontSize: '0.85rem', fontFamily: 'monospace', background: 'rgba(56, 189, 248, 0.15)', padding: '2px 8px', borderRadius: '4px' }}>
+                  Policy Version: v{policyVersion}
+                </span>
+              </div>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '1.02rem' }}>
-                <span style={{ color: '#94A3B8' }}>Partial Rollout Truncation Ratio (λ):</span>
-                <span style={{ color: '#10B981', fontWeight: 'bold' }}>{Math.round(lambdaVal * 100)}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '0.92rem' }}>
+                <span style={{ color: '#94A3B8' }}>Completion Threshold Ratio (λ):</span>
+                <span style={{ color: '#10B981', fontWeight: 'bold' }}>{Math.round(lambdaVal * 100)}% ({targetThreshold} / 16 active trajectories)</span>
               </div>
               <input 
                 type="range" 
@@ -135,69 +298,111 @@ export const PostTrainingDetails: React.FC = () => {
                 step="0.05"
                 value={lambdaVal} 
                 onChange={(e) => setLambdaVal(Number(e.target.value))}
-                style={{ width: '100%', marginBottom: '20px', accentColor: '#10B981' }}
+                style={{ width: '100%', marginBottom: '16px', accentColor: '#10B981' }}
               />
 
-              {/* Side-by-side comparative progress bars */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', background: '#02040a', padding: '15px', borderRadius: '8px' }}>
-                
-                {/* Full Rollout bar */}
+              {/* Status Banner */}
+              <div style={{ 
+                padding: '10px 14px', 
+                borderRadius: '6px', 
+                marginBottom: '16px',
+                background: thresholdReached ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.1)',
+                border: `1px solid ${thresholdReached ? '#10B981' : '#38BDF8'}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px'
+              }}>
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#94A3B8', marginBottom: '4px' }}>
-                    <span>Full Rollout (120 Steps)</span>
-                    <span style={{ color: rolloutTime >= 120 ? '#10B981' : '#FFB000' }}>
-                      {rolloutTime >= 120 ? 'Completed' : `Sampling: ${rolloutTime}/120`}
-                    </span>
-                  </div>
-                  <div style={{ background: '#1E293B', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
-                    <div 
-                      style={{ 
-                        background: '#38BDF8', 
-                        height: '100%', 
-                        width: `${(rolloutTime / 120) * 100}%` 
-                      }} 
-                    />
+                  <span style={{ fontWeight: 'bold', color: thresholdReached ? '#10B981' : '#38BDF8' }}>
+                    {thresholdReached ? '🎉 λ Threshold Reached! Stragglers Paused without Loss.' : '⏳ Worker Sampling in Progress...'}
+                  </span>
+                  <div style={{ color: '#94A3B8', fontSize: '0.82rem', marginTop: '2px' }}>
+                    Completed in batch: {activeCompletedCount}/16 · Ready prompt groups (K=4 in pool): {readyPromptIds.length > 0 ? readyPromptIds.map(p => `P${p}`).join(', ') : 'None yet'}
                   </div>
                 </div>
-
-                {/* Partial Rollout bar */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#E2E8F0', marginBottom: '4px' }}>
-                    <span>Partial Rollout ({completedTraj} Steps Truncated)</span>
-                    <span style={{ color: rolloutTime >= completedTraj ? '#10B981' : '#38BDF8', fontWeight: 'bold' }}>
-                      {rolloutTime >= completedTraj ? '🎉 Completed early, launching gradient optimization!' : `Sampling: ${Math.min(completedTraj, rolloutTime)}/${completedTraj}`}
-                    </span>
-                  </div>
-                  <div style={{ background: '#1E293B', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
-                    <div 
-                      style={{ 
-                        background: rolloutTime >= completedTraj ? '#10B981' : '#38BDF8', 
-                        height: '100%', 
-                        width: `${(Math.min(completedTraj, rolloutTime) / completedTraj) * 100}%` 
-                      }} 
-                    />
-                  </div>
-                </div>
+                {(thresholdReached || readyPromptIds.length > 0) && (
+                  <button onClick={handleOptimizeAndResume} style={{ background: '#10B981', color: '#000', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    🚀 Optimize Ready &amp; Resume Stragglers ➔
+                  </button>
+                )}
               </div>
 
-              <div className="control-panel" style={{ marginTop: '15px' }}>
-                <button className="btn" onClick={() => setIsRolloutRunning(!isRolloutRunning)}>
-                  {isRolloutRunning ? 'Pause Comparison' : 'Start Comparison'}
+              {/* Worker Swimlanes Grid */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#02040a', padding: '12px', borderRadius: '8px' }}>
+                <div style={{ fontSize: '0.82rem', color: '#94A3B8', marginBottom: '2px' }}>
+                  Worker Execution Slots (16 concurrent rollouts):
+                </div>
+                {/* Group workers by Prompt ID currently assigned */}
+                {Array.from(new Set(workerSlots.map(s => s.promptId))).map(pId => {
+                  const slotsForP = workerSlots.filter(s => s.promptId === pId);
+                  const isGroupReady = (completedPool[pId]?.length || 0) >= 4;
+                  const isConsumed = consumedPromptIds.includes(pId);
+                  return (
+                    <div key={pId} style={{ background: isConsumed ? 'rgba(100, 116, 139, 0.1)' : isGroupReady ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255,255,255,0.02)', padding: '8px 10px', borderRadius: '6px', border: `1px solid ${isConsumed ? 'rgba(100, 116, 139, 0.3)' : isGroupReady ? '#10B981' : 'rgba(255,255,255,0.06)'}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                        <span style={{ color: isConsumed ? '#94A3B8' : isGroupReady ? '#10B981' : '#E2E8F0', fontWeight: 'bold' }}>
+                          Prompt {pId} {isConsumed ? '✔ (Optimized & Consumed)' : isGroupReady ? '✅ (All K=4 Complete in Pool → Ready)' : `(Pool: ${completedPool[pId]?.length || 0} / 4)`}
+                        </span>
+                        <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          Slots [{slotsForP.map(s => s.slotId + 1).join(', ')}]
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                        {slotsForP.map(slot => {
+                          const isDone = slot.status === 'completed';
+                          const isPaused = slot.status === 'paused';
+                          const color = isDone ? '#10B981' : isPaused ? '#F59E0B' : '#38BDF8';
+                          return (
+                            <div key={slot.slotId} style={{ background: '#0B0F19', padding: '5px 8px', borderRadius: '4px', border: `1px solid ${color}40` }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginBottom: '2px' }}>
+                                <span style={{ color: '#94A3B8' }}>{slot.trajId}</span>
+                                <span style={{ color, fontWeight: 'bold' }}>
+                                  {isDone ? 'Done' : isPaused ? 'Paused' : `${Math.round(slot.progress)}%`}
+                                </span>
+                              </div>
+                              <div style={{ background: '#1E293B', height: '5px', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ background: color, width: `${slot.progress}%`, height: '100%', transition: 'width 0.1s' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action Toolbar */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                <button className="btn" onClick={() => setIsRolloutRunning(!isRolloutRunning)} style={{ fontSize: '0.85rem' }}>
+                  {isRolloutRunning ? '⏸️ Pause Workers' : '▶️ Resume Workers'}
                 </button>
-                <button className="btn-secondary" onClick={() => setRolloutTime(0)}>Reset Timeline</button>
+                <button className="btn" onClick={stepSimulation} style={{ fontSize: '0.85rem' }}>
+                  ⚡ Step Advance
+                </button>
+                <button className="btn-secondary" onClick={handleResetRollout} style={{ fontSize: '0.85rem' }}>
+                  ↺ Reset Simulation
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: '#94A3B8', marginTop: '12px', lineHeight: '1.45' }}>
+                💡 <b>Asynchronous Partial Rollout (R03):</b> Worker slots, completed result pools, and prompt groups are strictly decoupled. When the λ threshold pauses unfinished workers, previously completed trajectories are <b>retained in the pool</b>. When complete groups (K=4) are optimized, paused stragglers continue from their exact saved progress, eliminating redundant re-sampling.
               </div>
             </div>
           )}
 
+          {/* SUB-TAB 4.2: SPECULATIVE DRAFT */}
           {subTab === 'speculative' && (
             <div>
-              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>🚀 Speculative Decoding Gantt Chart (EAGLE-3 Cascaded Feature Verification)</h3>
+              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>🚀 Speculative Decoding Gantt Chart (EAGLE-3 Verification)</h3>
               
               <div style={{ background: '#02040a', padding: '15px', borderRadius: '8px', minHeight: '130px' }}>
-                <div style={{ fontSize: '1.02rem', color: '#FFF', fontWeight: 'bold', marginBottom: '5px' }}>
+                <div style={{ fontSize: '1rem', color: '#FFF', fontWeight: 'bold', marginBottom: '5px' }}>
                   Current Phase: <span style={{ color: '#38BDF8' }}>{ganttInfo.phase}</span>
                 </div>
-                <div style={{ fontSize: '1.15rem', color: '#94A3B8', marginBottom: '15px' }}>
+                <div style={{ fontSize: '0.88rem', color: '#94A3B8', marginBottom: '15px' }}>
                   {ganttInfo.desc}
                 </div>
 
@@ -218,7 +423,7 @@ export const PostTrainingDetails: React.FC = () => {
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: '#000',
-                        fontSize: '1.15rem',
+                        fontSize: '0.8rem',
                         fontWeight: 'bold',
                         transition: 'all 0.2s'
                       }}
@@ -229,62 +434,86 @@ export const PostTrainingDetails: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ fontSize: '1.02rem', color: '#94A3B8', marginTop: '12px', lineHeight: '1.4' }}>
-                💡 <b>Water Pipe Parallel Metaphor:</b> The draft model is like a small pipe flowing water rapidly at low cost (generating tokens). The target model is like a large main pipe that releases a strong gush of water periodically for verification (validating all tokens in parallel). If the small pipe's water goes astray, the main pipe quickly redirects it, ensuring both output quality and high speed.
+              <div style={{ fontSize: '0.88rem', color: '#94A3B8', marginTop: '12px', lineHeight: '1.45' }}>
+                💡 <b>Speculative State Restoration:</b> Lightweight EAGLE-3 drafts 4 tokens in sequence. Target model Kimi-K3 evaluates all 4 candidates in a single parallel step. Upon rejection, the valid accepted prefix is preserved in the MLA cache while the KDA state is restored from the accepted prefix inputs, ensuring mathematical equivalence with standard generation.
               </div>
             </div>
           )}
 
+          {/* SUB-TAB 4.3: MOPD */}
           {subTab === 'taskSynth' && (
             <div>
-              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>Nine Teacher Configurations Teaching One Student (MOPD Distillation Diagram)</h3>
+              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>
+                3 Domains × 3 Effort Levels = 9 Teacher Configurations (MOPD §4.2)
+              </h3>
               
-              <div style={{ background: '#02040a', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'center' }}>
-                <svg width="100%" height="330" viewBox="0 0 700 330" style={{ width: '100%' }}>
-                  <text x="232" y="20" fill="#94A3B8" fontSize="12" fontWeight="bold" textAnchor="middle">Reasoning effort</text>
-                  <text x="225" y="38" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">Low</text>
-                  <text x="355" y="38" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">High</text>
-                  <text x="485" y="38" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">Max</text>
+              <div style={{ background: '#02040a', padding: '16px', borderRadius: '8px' }}>
+                {/* 3x3 Teacher Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '130px repeat(3, 1fr)', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: 'bold' }}>Domain \ Effort</div>
+                  {MOPD_EFFORT_LEVELS.map(eff => (
+                    <div key={eff.id} style={{ color: '#38BDF8', fontSize: '0.8rem', fontWeight: 'bold', textAlign: 'center' }}>
+                      {eff.label}
+                    </div>
+                  ))}
 
-                  {/* 3 domains × 3 reasoning-effort levels = 9 teacher configurations */}
-                  <text x="20" y="68" fill="#3B82F6" fontSize="13" fontWeight="bold">Math domain</text>
-                  <text x="20" y="123" fill="#10B981" fontSize="13" fontWeight="bold">Code domain</text>
-                  <text x="20" y="178" fill="#F59E0B" fontSize="13" fontWeight="bold">General domain</text>
+                  {MOPD_TEACHER_DOMAINS.map(dom => (
+                    <React.Fragment key={dom.id}>
+                      <div style={{ color: '#E2E8F0', fontSize: '0.82rem', fontWeight: 'bold' }}>
+                        {dom.label}
+                      </div>
+                      {MOPD_EFFORT_LEVELS.map(eff => {
+                        const isSelected = selectedDomain === dom.id && selectedEffort === eff.id;
+                        return (
+                          <button
+                            key={`${dom.id}-${eff.id}`}
+                            onClick={() => { setSelectedDomain(dom.id); setSelectedEffort(eff.id); }}
+                            style={{
+                              padding: '8px 4px',
+                              borderRadius: '4px',
+                              border: `1px solid ${isSelected ? '#10B981' : 'rgba(255,255,255,0.1)'}`,
+                              background: isSelected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.03)',
+                              color: isSelected ? '#10B981' : '#CBD5E1',
+                              cursor: 'pointer',
+                              textAlign: 'center',
+                              fontSize: '0.8rem',
+                              fontWeight: isSelected ? 'bold' : 'normal',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {getDomainShortCode(dom.id)}_{eff.id}
+                          </button>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
 
-                  {[0, 1, 2].map((row) => [0, 1, 2].map((col) => {
-                    const x = 170 + col * 130;
-                    const y = 48 + row * 55;
-                    const colors = ['#1E3A8A', '#064E3B', '#78350F'];
-                    const borders = ['#3B82F6', '#10B981', '#F59E0B'];
-                    return (
-                      <g key={`${row}-${col}`}>
-                        <rect x={x} y={y} width="110" height="38" rx="5" fill={colors[row]} stroke={borders[row]} strokeWidth="1.5" />
-                        <text x={x + 55} y={y + 24} fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle">Teacher</text>
-                      </g>
-                    );
-                  }))}
+                {/* Selected Teacher & Distillation Dataflow */}
+                <div style={{ marginTop: '16px', padding: '12px', borderRadius: '6px', background: '#0B0F19', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                    <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>
+                      🎯 Active Teacher: {MOPD_TEACHER_DOMAINS.find(d => d.id === selectedDomain)?.label} · {MOPD_EFFORT_LEVELS.find(e => e.id === selectedEffort)?.label}
+                    </span>
+                    <span style={{ background: '#0F172A', color: '#F59E0B', border: '1px solid #F59E0B40', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                      sg(·) wraps complete reward r_t
+                    </span>
+                  </div>
+                  <div style={{ color: '#94A3B8', fontSize: '0.82rem', lineHeight: '1.45', marginBottom: '8px' }}>
+                    {MOPD_TEACHER_DOMAINS.find(d => d.id === selectedDomain)?.desc} ({MOPD_EFFORT_LEVELS.find(e => e.id === selectedEffort)?.desc}).
+                  </div>
 
-                  {/* Compact routing bus keeps the nine sources visible without hiding their configuration. */}
-                  <path d="M 600 67 L 625 67 L 625 177" stroke="#38BDF8" strokeWidth="1.5" fill="none" />
-                  <path d="M 600 122 L 625 122" stroke="#38BDF8" strokeWidth="1.5" fill="none" />
-                  <path d="M 600 177 L 625 177" stroke="#38BDF8" strokeWidth="1.5" fill="none" />
-                  <path d="M 625 122 L 650 122 L 650 224 L 500 224" stroke="#38BDF8" strokeWidth="1.5" strokeDasharray="4,3" fill="none" />
-                  <text x="518" y="210" fill="#38BDF8" fontSize="11" textAnchor="middle">9 configurations</text>
-
-                  <rect x="220" y="210" width="280" height="30" rx="4" fill="#070913" stroke="#38BDF8" strokeWidth="1" />
-                  <text x="360" y="230" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">MOPD distillation loss (Eq 15)</text>
-
-                  <path d="M 360 240 L 360 270" stroke="rgba(0, 242, 254, 0.6)" strokeWidth="1.5" strokeDasharray="4,3" />
-                  <rect x="220" y="270" width="280" height="45" rx="6" fill="#312E81" stroke="#6366F1" strokeWidth="2" />
-                  <text x="360" y="297" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">Student model π_θ (K3)</text>
-                </svg>
+                  {/* Math Formula Box */}
+                  <div style={{ background: '#070913', padding: '10px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#E2E8F0', lineHeight: '1.6' }}>
+                    <div style={{ color: '#38BDF8' }}>1. Student π_θ samples on-policy rollouts: y ~ π_θ(x)</div>
+                    <div style={{ color: '#F59E0B' }}>2. Detached reward: r_t = clip( sg( log T(y_t) - log π_θ(y_t) ), -R_max, R_max )</div>
+                    <div style={{ color: '#10B981' }}>3. Policy update: L_MOPD(θ) = -E[ ∑_t r_t · log π_θ(y_t) ] (Gradients update θ only)</div>
+                  </div>
+                </div>
               </div>
 
-              <div style={{ fontSize: '1.02rem', color: '#94A3B8', marginTop: '12px', lineHeight: '1.4' }}>
-                💡 <b>MOPD Fusion:</b> Nine teacher configurations — 3 domains × 3 reasoning-effort levels — continuously pass knowledge to a single student model. The 3×3 matrix makes each domain/effort configuration explicit; it does not imply nine different parameter sizes. Using <b>stop-gradient</b> techniques prevents cross-teacher interference, allowing the student model to learn complementary strengths.
-              </div>
-              <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '5px', background: 'rgba(56, 189, 248, 0.07)', border: '1px solid rgba(56, 189, 248, 0.2)', color: '#E2E8F0', fontFamily: 'monospace', fontSize: '0.92rem', textAlign: 'center' }}>
-                9 teacher policies → one MOPD loss → student π_θ (K3)
+              <div style={{ fontSize: '0.85rem', color: '#94A3B8', marginTop: '12px', lineHeight: '1.45' }}>
+                💡 <b>MOPD Stop-Gradient Principle (R07):</b> The stop-gradient operator <code>sg(·)</code> is applied to the <b>entire token reward difference</b> <code>log T - log π_θ</code>. This detaches both the teacher probabilities and the student denominator in the reward expression, ensuring student model parameters θ receive policy gradients strictly through the standard policy log-likelihood <code>log π_θ(y_t)</code>.
               </div>
             </div>
           )}
@@ -293,36 +522,39 @@ export const PostTrainingDetails: React.FC = () => {
 
         {/* Right Column: Comparative tables & collapsible math */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <div className="card-title">📖 Quantized Parameter Allocation & Training Recipe</div>
+          <div className="card-title">📖 Quantized Parameter Allocation &amp; Training Recipe</div>
 
           {/* Quantization bit width details table */}
           <div style={{ background: '#02040a', padding: '12px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '1.02rem', color: '#E2E8F0', fontWeight: 'bold', marginBottom: '8px' }}>
-              MXFP Deployment-Aware Quantization Bit-Width Allocation (Item 22)
+            <div style={{ fontSize: '0.95rem', color: '#E2E8F0', fontWeight: 'bold', marginBottom: '6px' }}>
+              MXFP Deployment-Aware Quantization Bit-Width Allocation (§5.1)
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1.15rem', textAlign: 'left' }}>
+            <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginBottom: '10px', lineHeight: '1.45' }}>
+              <b>SFT ➔ RL Continuous QAT Timeline:</b> Quantization-Aware Training begins during Supervised Fine-Tuning (SFT) and continues through Reinforcement Learning (RL). Performing RL directly on quantized weights prevents post-training accuracy collapse upon deployment.
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #334155', color: '#94A3B8' }}>
-                  <th style={{ padding: '6px' }}>Core Component</th>
-                  <th style={{ padding: '6px' }}>Deployment Precision (Bit-Width)</th>
-                  <th style={{ padding: '6px' }}>Performance Description</th>
+                  <th style={{ padding: '6px' }}>Component</th>
+                  <th style={{ padding: '6px' }}>Precision</th>
+                  <th style={{ padding: '6px' }}>Rationale</th>
                 </tr>
               </thead>
               <tbody>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <td style={{ padding: '6px', color: '#E2E8F0' }}>MoE Expert Weights</td>
+                  <td style={{ padding: '6px', color: '#E2E8F0' }}>MoE Routed Weights</td>
                   <td style={{ padding: '6px', color: '#10B981', fontWeight: 'bold' }}>MXFP4</td>
-                  <td style={{ padding: '6px', color: '#94A3B8' }}>Saves significant memory and relaxes multi-GPU node communication latency</td>
+                  <td style={{ padding: '6px', color: '#94A3B8' }}>Drastically shrinks model memory footprint &amp; inter-GPU communication bandwidth across 896 routed experts</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <td style={{ padding: '6px', color: '#E2E8F0' }}>Feature Activations</td>
                   <td style={{ padding: '6px', color: '#38BDF8' }}>MXFP8</td>
-                  <td style={{ padding: '6px', color: '#94A3B8' }}>Maintains dynamic activation range and prevents overflow</td>
+                  <td style={{ padding: '6px', color: '#94A3B8' }}>Preserves dynamic range and suppresses outlier overflow in dense representations</td>
                 </tr>
                 <tr>
-                  <td style={{ padding: '6px', color: '#E2E8F0' }}>Critical Attention / Router Layers</td>
-                  <td style={{ padding: '6px', color: '#F59E0B' }}>BF16 / FP32</td>
-                  <td style={{ padding: '6px', color: '#94A3B8' }}>Preserves high precision to prevent error accumulation</td>
+                  <td style={{ padding: '6px', color: '#E2E8F0' }}>Shared Experts, Attention, Router, Latent Projections</td>
+                  <td style={{ padding: '6px', color: '#F59E0B' }}>BF16 / FP8</td>
+                  <td style={{ padding: '6px', color: '#94A3B8' }}>High-precision backbone layers, router logits, and latent compression (MLA d_c=512, MoE l=3584) prevent catastrophic accumulation error</td>
                 </tr>
               </tbody>
             </table>
@@ -332,37 +564,42 @@ export const PostTrainingDetails: React.FC = () => {
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
             <button 
               className="btn" 
-              style={{ width: '100%', justifyContent: 'space-between', display: 'flex', fontSize: '1.02rem', padding: '8px 12px' }}
+              style={{ width: '100%', justifyContent: 'space-between', display: 'flex', fontSize: '0.9rem', padding: '8px 12px' }}
               onClick={() => setShowFormula(!showFormula)}
             >
-              <span>{showFormula ? '▼ Collapse Mathematical Principles & Formulas' : '▶ Click ? to View Mathematical Principles & Formulas'}</span>
+              <span>{showFormula ? '▼ Collapse Mathematical Principles & Formulas' : '▶ Click to View Mathematical Principles & Formulas'}</span>
             </button>
 
             {showFormula && (
               <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div className="formula-box" style={{ fontSize: '1.15rem', lineHeight: '1.4' }}>
-                  <strong>Multi-Teacher On-Policy Distillation (MOPD) Clipped Ratio Loss (Item 21 - Eq 15):</strong>
+                <div className="formula-box" style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
+                  <strong>Multi-Teacher On-Policy Distillation (MOPD) Clipped Ratio Loss (Eq. 4.15):</strong>
                   <div style={{ fontFamily: 'monospace', color: '#10B981', margin: '4px 0' }}>
-                    r_opd = clip( sg( log( π_teacher / π_student ) ), -R_max, R_max)
+                    r_opd = clip( sg( log( T / π_student ) ), -R_max, R_max)
                   </div>
-                  <div style={{ color: '#94A3B8', fontSize: '1.15rem' }}>
-                    Uses sg (stop-gradient) to ensure multi-mentor updates do not conflict.
+                  <div style={{ color: '#94A3B8', fontSize: '0.82rem' }}>
+                    The stop-gradient sg(·) truncates gradients through the reward difference, so student updates occur exclusively through policy log-probability gradients.
                   </div>
                 </div>
 
-                <div className="formula-box" style={{ fontSize: '1.15rem', lineHeight: '1.4' }}>
-                  <strong>Speculative Acceptance Optimization (LK Loss) Formula (Item 23):</strong>
-                  <div style={{ fontFamily: 'monospace', color: '#38BDF8', margin: '4px 0' }}>
-                    L_LK = -log ( ∑_(x ∈ V) min(p(x), q(x)) )
+                <div className="formula-box" style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
+                  <strong>Quantile Balancing (QB) Batch Margin Quantile Formulation (Eq. 2.5):</strong>
+                  <div style={{ fontFamily: 'monospace', color: '#38BDF8', margin: '4px 0', fontSize: '0.82rem' }}>
+                    M_(i,j) = s_(i,j) - α_i^(t),  b̂_j = -Quantile(M_(:,j), 1 - C/M)
                   </div>
-                  <div style={{ color: '#94A3B8', fontSize: '1.15rem' }}>
-                    Maximizes overlap between Draft and Target probabilities to raise speculative draft acceptance rate.
+                  <div style={{ fontFamily: 'monospace', color: '#38BDF8', margin: '2px 0', fontSize: '0.82rem' }}>
+                    b_j^(t+1) = b̂_j - Mean(b̂)
+                  </div>
+                  <div style={{ color: '#94A3B8', fontSize: '0.82rem' }}>
+                    Unlike standard gradient updates based on load error, Quantile Balancing computes the exact margin distribution quantile across batch tokens to determine bias b^(t+1) for the next training batch.
                   </div>
                 </div>
               </div>
             )}
           </div>
+
         </div>
+
       </div>
     </div>
   );

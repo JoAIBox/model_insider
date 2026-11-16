@@ -1,27 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MathRenderer } from './MathRenderer';
+import { calculateMemoryEstimates } from '../utils/toyMath';
+import { k3Specs } from '../data/k3Specs';
 
 export const MLAOperatorDeepDive: React.FC = () => {
-  const [compressDim, setCompressDim] = useState<number>(512); // Teaching slider: K3 does not disclose d_c.
-  const [ropeDim] = useState<number>(0); // K3 MLA is NoPE: no independent RoPE cache branch.
-  const [contextLength, setContextLength] = useState<number>(128000); // Teaching default for the calculator.
-  const [batchSize, setBatchSize] = useState<number>(4);
+  const [compressDim, setCompressDim] = useState<number>(k3Specs.mla.dc); // Official config.json: d_c = 512
+  const [contextLength, setContextLength] = useState<number>(128000);
+  const [batchSize, setBatchSize] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'philosophy' | 'pipeline' | 'matrixAbsorption' | 'ropeDecouple' | 'memoryCalculator'>('philosophy');
   const [selectedStage, setSelectedStage] = useState<'input' | 'compress' | 'rope' | 'absorption' | 'unproject'>('compress');
   const [isAbsorbed, setIsAbsorbed] = useState<boolean>(true); // Matrix absorption toggle animation state
 
-  // Report-confirmed structural constant; undisclosed widths are teaching estimates only.
-  const numHeads = 96;
-  const headDim = 128; // d_h: teaching estimate, not a K3 report value.
+  const numHeads = k3Specs.mla.heads; // 96 heads
+  const headDim = k3Specs.mla.dh; // 128 d_h
 
-  // Memory Calculations
-  const mhaFloatsPerToken = 2 * numHeads * headDim; // 24,576 floats
-  const mlaFloatsPerToken = compressDim + ropeDim; // 576 floats
+  // Full-model cache estimates across all 93 layers (24 MLA + 69 KDA)
+  const memEst = useMemo(() => {
+    return calculateMemoryEstimates(batchSize, contextLength, 2, compressDim);
+  }, [batchSize, contextLength, compressDim]);
+
+  const mhaFloatsPerToken = 2 * numHeads * headDim; // 24,576 floats per layer
+  const mlaFloatsPerToken = compressDim; // d_c = 512 floats per layer
   const savingsRatio = (mhaFloatsPerToken / mlaFloatsPerToken).toFixed(1);
 
-  // Memory in GB (FP16)
-  const mhaMemoryGB = ((batchSize * contextLength * mhaFloatsPerToken * 2) / (1024 * 1024 * 1024)).toFixed(2);
-  const mlaMemoryGB = ((batchSize * contextLength * mlaFloatsPerToken * 2) / (1024 * 1024 * 1024)).toFixed(2);
+  // Full model memory in GiB
+  const mhaMemoryGB = memEst.standardMhaKvGiB.toFixed(2);
+  const mlaMemoryGB = memEst.mlaLatentKvGiB.toFixed(2);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', background: '#02040a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', color: '#E2E8F0' }}>
@@ -35,11 +39,11 @@ export const MLAOperatorDeepDive: React.FC = () => {
               MLA (Multi-Head Latent Attention): complete architecture and dimension walkthrough
             </h2>
             <span style={{ background: 'rgba(167, 139, 250, 0.15)', color: '#A78BFA', border: '1px solid #A78BFA', padding: '3px 10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-              Residual stream + low-rank KV + NoPE global content interaction
+              Residual stream + low-rank KV + NoPE + Full-rank output gate
             </span>
           </div>
           <p style={{ fontSize: '1.05rem', color: '#94A3B8', margin: '6px 0 0 0', lineHeight: '1.5' }}>
-            Complete flow: <b>7,168-d residual bypass</b>, <b>low-rank KV latent (width undisclosed)</b>, and <b>NoPE global content interaction</b>.
+            Complete flow: <b>7,168-d residual bypass</b>, <b>low-rank KV latent (d_c = 512)</b>, and <b>pure NoPE global content attention with full-rank output gate</b>.
           </p>
         </div>
 
@@ -103,7 +107,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            3. 🧩 NoPE and KDA position / recency roles
+            3. 🚪 Pure NoPE &amp; full-rank output gate
           </button>
           <button
             onClick={() => setActiveTab('memoryCalculator')}
@@ -131,42 +135,47 @@ export const MLAOperatorDeepDive: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '1.4rem' }}>🏛️</span>
               <h3 style={{ fontSize: '1.3rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-            MLA complete architecture: residual highway + low-rank latent space + NoPE content attention
+                MLA complete architecture: residual highway + low-rank latent space (d_c=512) + pure NoPE + full-rank output gate
               </h3>
             </div>
             <p style={{ color: '#E2E8F0', fontSize: '1.05rem', margin: 0, lineHeight: '1.6' }}>
-              This diagram preserves the complete teaching flow: the <b>7,168-dimensional residual highway</b>, the <b>low-rank KV latent branch whose width is not disclosed in the K3 report</b>, and the <b>NoPE boundary</b>. K3 MLA does not add an independent RoPE cache branch; positional and recency information is supplied by the KDA side of the hybrid block.
+              Official K3 specification: the <b>7,168-dimensional residual highway</b> branches into RMSNorm, compressing key-value tokens into a <b>low-rank KV latent c_t^KV ∈ ℝ^512 (d_c = 512)</b>. K3 MLA applies <b>pure NoPE</b> without an independent RoPE branch; positional and recency information is provided by the alternating KDA layers in the backbone (3 KDA : 1 MLA). Before final projection, attention output õ_t is modulated by an <b>input-dependent full-rank output gate</b>: y_t = W_o [Sigmoid(W_g x_t) ⊙ õ_t].
             </p>
           </div>
 
           <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
-            <h3 style={{ fontSize: '1.15rem', color: '#38BDF8', margin: '0 0 12px 0', fontWeight: 'bold' }}>Guided three-step reading path</h3>
+            <h3 style={{ fontSize: '1.15rem', color: '#38BDF8', margin: '0 0 12px 0', fontWeight: 'bold' }}>Guided four-step reading path</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
               <div style={{ padding: '12px', borderRadius: '7px', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.35)' }}>
-                <b style={{ color: '#A78BFA' }}>1. Compress and cache</b>
-                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>x_t → c_t^KV = W_c x_t</div>
-                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>A compact latent is stored once per token; its width d_c is not disclosed.</small>
+                <b style={{ color: '#A78BFA' }}>1. Compress and cache (d_c = 512)</b>
+                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>x_t → c_t^KV = W_c x_t ∈ ℝ^512</div>
+                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>KV cache stores c_t^KV once per token (48× smaller than standard MHA 24,576 floats).</small>
               </div>
               <div style={{ padding: '12px', borderRadius: '7px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)' }}>
-                <b style={{ color: '#F59E0B' }}>2. Query and attend</b>
-                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>q_t → W_QK → score → Softmax</div>
-                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>Matrix absorption reorders fixed projections; KDA supplies the position / recency role in the hybrid block.</small>
+                <b style={{ color: '#F59E0B' }}>2. Pure NoPE global attention</b>
+                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>q_t ∈ ℝ^[96×128], NoPE</div>
+                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>No RoPE cache needed; alternating KDA layers supply position and recency across the 1M context.</small>
+              </div>
+              <div style={{ padding: '12px', borderRadius: '7px', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.35)' }}>
+                <b style={{ color: '#38BDF8' }}>3. Full-rank output gate</b>
+                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>g_t = Sigmoid(W_g x_t) ∈ ℝ^12,288</div>
+                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>Input-dependent full-rank gate modulates each attention channel before output projection.</small>
               </div>
               <div style={{ padding: '12px', borderRadius: '7px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.35)' }}>
-                <b style={{ color: '#10B981' }}>3. Project and merge</b>
-                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>o_t → W_o → Δy → residual</div>
-                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>The attention output is mapped back to the 7,168-d stream and merged with the residual highway.</small>
+                <b style={{ color: '#10B981' }}>4. Project and accumulate</b>
+                <div style={{ marginTop: '5px', color: '#E2E8F0', fontFamily: 'monospace' }}>y_t = W_o [g_t ⊙ õ_t] → AttnRes partial_sum</div>
+                <small style={{ display: 'block', marginTop: '5px', color: '#94A3B8', lineHeight: '1.45' }}>Maps back to the 7,168-d model stream and accumulates into Block AttnRes partial sum (partial_sum ← partial_sum + y_t; no standard x+y residual shortcut).</small>
               </div>
             </div>
           </div>
 
-          <details style={{ background: '#070913', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)' }}>
+          <details open style={{ background: '#070913', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)' }}>
             <summary style={{ cursor: 'pointer', padding: '14px 18px', color: '#E2E8F0', fontWeight: 'bold' }}>Show complete architecture map (all branches and dimensions)</summary>
 
           {/* MASTER SVG FLOWCHART */}
           <div style={{ background: '#070913', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', overflowX: 'auto' }}>
             
-            <svg viewBox="0 0 980 480" width="100%" height="480" style={{ overflow: 'visible', minWidth: '980px' }}>
+            <svg viewBox="0 0 980 440" width="100%" height="440" style={{ overflow: 'visible', minWidth: '980px' }}>
               <defs>
                 <linearGradient id="grad-highway" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="#38BDF8" />
@@ -188,93 +197,91 @@ export const MLAOperatorDeepDive: React.FC = () => {
 
               {/* === TRACK 1: MAIN RESIDUAL HIGHWAY (TOP PATH) === */}
               <g>
-                <rect x="20" y="40" width="110" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="2" />
-                <text x="75" y="62" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Input x_t</text>
-                <text x="75" y="80" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
+                <rect x="20" y="30" width="110" height="50" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="2" />
+                <text x="75" y="52" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Input x_t</text>
+                <text x="75" y="70" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
 
                 {/* Main Highway Line */}
-                <path d="M 130 65 L 830 65" stroke="url(#grad-highway)" strokeWidth="5" fill="none" markerEnd="url(#arrow-master-blue)" />
-                <rect x="340" y="40" width="280" height="24" rx="12" fill="#070913" stroke="#00F2FE" strokeWidth="1.5" />
-                <text x="480" y="56" fill="#00F2FE" fontSize="11" fontWeight="bold" textAnchor="middle">
+                <path d="M 130 55 L 850 55" stroke="url(#grad-highway)" strokeWidth="5" fill="none" markerEnd="url(#arrow-master-blue)" />
+                <rect x="340" y="30" width="280" height="24" rx="12" fill="#070913" stroke="#00F2FE" strokeWidth="1.5" />
+                <text x="480" y="46" fill="#00F2FE" fontSize="11" fontWeight="bold" textAnchor="middle">
                   🛣️ 7,168-d residual highway (bypass path)
                 </text>
               </g>
 
               {/* SPLIT POINT FROM HIGHWAY TO MLA SIDE-BRANCH */}
-              <path d="M 130 80 L 170 180" stroke="#A78BFA" strokeWidth="2" fill="none" />
-              <circle cx="170" cy="180" r="4" fill="#A78BFA" />
-              <circle cx="150" cy="150" r="12" fill="#A78BFA" stroke="#FFF" strokeWidth="1" />
-              <text x="150" y="155" fill="#000" fontSize="13" fontWeight="bold" textAnchor="middle">1</text>
+              <path d="M 130 70 L 170 170" stroke="#A78BFA" strokeWidth="2" fill="none" />
+              <circle cx="170" cy="170" r="4" fill="#A78BFA" />
 
               {/* RMSNORM NODE */}
-              <rect x="170" y="155" width="90" height="50" rx="6" fill="#0F172A" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-              <text x="215" y="178" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle">RMSNorm</text>
-              <text x="215" y="195" fill="#94A3B8" fontSize="10" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
+              <rect x="170" y="145" width="90" height="50" rx="6" fill="#0F172A" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+              <text x="215" y="168" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle">RMSNorm</text>
+              <text x="215" y="185" fill="#94A3B8" fontSize="11" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
 
-              {/* === TRACK 2: LATENT KV PATH (MIDDLE TRACK) === */}
-              {/* Split into Semantic Latent Projection */}
-              <path d="M 260 170 L 300 170" stroke="#A78BFA" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-purple)" />
-              <rect x="300" y="145" width="160" height="50" rx="6" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
-              <text x="380" y="167" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">KV latent c_t^KV = W_c · x_t</text>
-              <text x="380" y="185" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">c_t^KV ∈ ℝ^d_c (not disclosed)</text>
+              {/* PATH A: LATENT KV COMPRESSION (STORED IN KV CACHE) */}
+              <path d="M 260 160 L 300 160" stroke="#A78BFA" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-purple)" />
+              <rect x="300" y="135" width="165" height="50" rx="6" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
+              <text x="382" y="157" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">KV Latent: c_t^KV = W_c x_t</text>
+              <text x="382" y="175" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">c_t^KV ∈ ℝ^512 (d_c = 512)</text>
 
-              {/* === TRACK 3: NOPE / KDA POSITION BOUNDARY (BOTTOM TRACK) === */}
-              <path d="M 260 190 C 260 320, 270 320, 300 320" stroke="#F59E0B" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-amber)" />
-              <rect x="300" y="295" width="160" height="50" rx="6" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
-              <text x="380" y="317" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">NoPE: no independent positional Key branch</text>
-              <text x="380" y="335" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">KDA supplies position / recency signals</text>
+              {/* PATH B: PURE NoPE QUERY PROJECTION */}
+              <path d="M 260 180 C 260 230, 270 230, 300 230" stroke="#38BDF8" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-blue)" />
+              <rect x="300" y="210" width="165" height="50" rx="6" fill="rgba(56, 189, 248, 0.15)" stroke="#38BDF8" strokeWidth="2" />
+              <text x="382" y="232" fill="#38BDF8" fontSize="12" fontWeight="bold" textAnchor="middle">Query: q_t (NoPE)</text>
+              <text x="382" y="250" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">96 heads × d_h=128</text>
+
+              {/* PATH C: FULL-RANK OUTPUT GATE BRANCH */}
+              <path d="M 215 195 C 215 320, 260 320, 300 320" stroke="#F59E0B" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-amber)" />
+              <rect x="300" y="295" width="165" height="50" rx="6" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
+              <text x="382" y="317" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">Full-rank Gate W_g x_t</text>
+              <text x="382" y="335" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">g_t = Sigmoid(W_g x_t) ∈ ℝ^12,288</text>
 
               {/* HIGHLIGHT DASHED BOX FOR STORED KV CACHE */}
-              <rect x="290" y="125" width="180" height="235" rx="8" fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="5,4" />
-              <text x="380" y="375" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">💾 KV cache stores c_t^KV only</text>
-              <text x="380" y="390" fill="#10B981" fontSize="10" textAnchor="middle">(d_c is not disclosed; no separate RoPE vector)</text>
+              <rect x="290" y="120" width="185" height="75" rx="8" fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="5,4" />
+              <text x="382" y="112" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">💾 KV Cache: c_t^KV ∈ ℝ^512 only</text>
 
-              {/* QUERY PROJECTION & UNPROJECTION TO MULTI-HEAD CONTEXT */}
-              <path d="M 460 170 L 520 170" stroke="#A78BFA" strokeWidth="2" fill="none" />
-              <path d="M 460 320 L 520 320" stroke="#F59E0B" strokeWidth="2" fill="none" />
+              {/* ATTENTION DOT PRODUCT AND SOFTMAX NODE */}
+              <path d="M 465 160 C 490 160, 490 185, 515 185" stroke="#A78BFA" strokeWidth="2" fill="none" />
+              <path d="M 465 230 C 490 230, 490 205, 515 205" stroke="#38BDF8" strokeWidth="2" fill="none" />
 
-              {/* DOT PRODUCT & MULTI-HEAD ATTENTION SCORE NODE */}
               <g>
-                <rect x="520" y="145" width="170" height="200" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="#38BDF8" strokeWidth="2" />
-                <text x="605" y="170" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">Multi-head Softmax dot product & aggregation</text>
-
-                <text x="605" y="195" fill="#A78BFA" fontSize="11" textAnchor="middle">NoPE content score: q_t^C · K_j^Cᵀ</text>
-                <text x="605" y="215" fill="#F59E0B" fontSize="11" textAnchor="middle">Position / recency: supplied by KDA branch</text>
-                
-                <line x1="535" y1="230" x2="675" y2="230" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                
-                <text x="605" y="250" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle">Aggregated context o_t</text>
-                <text x="605" y="268" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">o_t ∈ ℝ^[96 heads × d_h]</text>
-                <text x="605" y="285" fill="#94A3B8" fontSize="10" textAnchor="middle">96 heads; per-head width not disclosed</text>
-                <text x="605" y="302" fill="#94A3B8" fontSize="10" textAnchor="middle">Total attention width is not disclosed</text>
-              <text x="605" y="325" fill="#38BDF8" fontSize="10" fontWeight="bold" textAnchor="middle">⚡ Matrix absorption avoids materializing K/V</text>
-              <circle cx="500" cy="130" r="12" fill="#F59E0B" stroke="#FFF" strokeWidth="1" />
-              <text x="500" y="135" fill="#000" fontSize="13" fontWeight="bold" textAnchor="middle">2</text>
+                <rect x="515" y="145" width="170" height="115" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="#38BDF8" strokeWidth="2" />
+                <text x="600" y="170" fill="#38BDF8" fontSize="13" fontWeight="bold" textAnchor="middle">Attention Core</text>
+                <text x="600" y="190" fill="#A78BFA" fontSize="11" textAnchor="middle">NoPE score: q_t · K_j^T</text>
+                <text x="600" y="210" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">õ_t ∈ ℝ^12,288</text>
+                <text x="600" y="230" fill="#94A3B8" fontSize="10.5" textAnchor="middle">Matrix absorption avoids K,V alloc</text>
+                <text x="600" y="248" fill="#64748B" fontSize="10" textAnchor="middle">(96 heads × 128-d = 12,288)</text>
               </g>
 
+              {/* CHANNEL-WISE MODULATION: õ_t ⊙ g_t */}
+              <path d="M 685 200 L 725 200" stroke="#38BDF8" strokeWidth="2" fill="none" />
+              <path d="M 465 320 C 725 320, 725 260, 725 220" stroke="#F59E0B" strokeWidth="2" fill="none" />
+              <circle cx="725" cy="200" r="14" fill="#0F172A" stroke="#F59E0B" strokeWidth="2" />
+              <text x="725" y="205" fill="#F59E0B" fontSize="15" fontWeight="bold" textAnchor="middle">⊙</text>
+              <text x="725" y="180" fill="#F59E0B" fontSize="11" fontWeight="bold" textAnchor="middle">g_t ⊙ õ_t</text>
+
               {/* OUTPUT UP-PROJECTION W_o */}
-              <path d="M 690 245 L 730 245" stroke="#38BDF8" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-green)" />
+              <path d="M 740 200 L 775 200" stroke="#10B981" strokeWidth="2" fill="none" markerEnd="url(#arrow-master-green)" />
               <g>
-                <rect x="730" y="220" width="130" height="50" rx="6" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="2" />
-                <text x="795" y="242" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">Output projection W_o</text>
-              <text x="795" y="260" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Δy ∈ ℝ^7,168</text>
-              <circle cx="715" cy="210" r="12" fill="#10B981" stroke="#FFF" strokeWidth="1" />
-              <text x="715" y="215" fill="#000" fontSize="13" fontWeight="bold" textAnchor="middle">3</text>
+                <rect x="775" y="175" width="105" height="50" rx="6" fill="rgba(16, 185, 129, 0.15)" stroke="#10B981" strokeWidth="2" />
+                <text x="827" y="197" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">Output W_o</text>
+                <text x="827" y="215" fill="#FFF" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">y_t ∈ ℝ^7,168</text>
               </g>
 
               {/* RE-CONVERGENCE UP TO RESIDUAL HIGHWAY */}
-              <path d="M 860 245 C 865 245, 865 85, 865 80" stroke="#10B981" strokeWidth="2.5" fill="none" />
+              <path d="M 880 200 C 890 200, 890 75, 890 70" stroke="#10B981" strokeWidth="2.5" fill="none" />
               
-              {/* SUMMATION NODE */}
-              <circle cx="865" cy="65" r="16" fill="#10B981" stroke="#FFF" strokeWidth="2" />
-              <text x="865" y="71" fill="#000" fontSize="20" fontWeight="bold" textAnchor="middle">+</text>
-              <text x="865" y="35" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">Residual addition</text>
+              {/* SUMMATION NODE INTO BLOCK ATTNRES PARTIAL SUM */}
+              <circle cx="890" cy="55" r="15" fill="#10B981" stroke="#FFF" strokeWidth="2" />
+              <text x="890" y="61" fill="#000" fontSize="18" fontWeight="bold" textAnchor="middle">+</text>
+              <text x="890" y="25" fill="#10B981" fontSize="10" fontWeight="bold" textAnchor="middle">partial_sum +</text>
 
               {/* FINAL OUTPUT NODE (7,168-d) */}
-              <line x1="881" y1="65" x2="925" y2="65" stroke="#10B981" strokeWidth="3" />
-              <rect x="925" y="40" width="45" height="50" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="2" />
-              <text x="947.5" y="64" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">h_l+1</text>
-              <text x="947.5" y="80" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">7168d</text>
+              <line x1="905" y1="55" x2="935" y2="55" stroke="#10B981" strokeWidth="3" />
+              <rect x="935" y="30" width="40" height="50" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="2" />
+              <text x="955" y="50" fill="#10B981" fontSize="9" fontWeight="bold" textAnchor="middle">Block</text>
+              <text x="955" y="63" fill="#FFF" fontSize="8" fontFamily="monospace" textAnchor="middle">AttnRes</text>
+              <text x="955" y="74" fill="#38BDF8" fontSize="8" fontFamily="monospace" textAnchor="middle">7168d</text>
 
             </svg>
 
@@ -284,25 +291,25 @@ export const MLAOperatorDeepDive: React.FC = () => {
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #38BDF8' }}>
                 <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>1. Main-stream input</span>
                 <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>x_t ∈ ℝ^7,168</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>The residual bypass preserves the main-stream representation.</p>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>The 7,168-d residual bypass preserves the model representation across all 93 layers.</p>
               </div>
 
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #A78BFA' }}>
                 <span style={{ color: '#A78BFA', fontWeight: 'bold', fontSize: '0.95rem' }}>2. KV cache representation</span>
-                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>d_c latent; not disclosed</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>K3 MLA uses NoPE; KDA carries positional / recency information.</p>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>c_t^KV ∈ ℝ^512 (d_c = 512)</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Pure NoPE: only the 512-d latent is cached, achieving 48× KV memory savings vs standard MHA.</p>
               </div>
 
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #F59E0B' }}>
-                <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>3. Multi-head context</span>
-                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>o_t ∈ ℝ^[96 × d_h]</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>K3 confirms 96 heads; head width is not disclosed.</p>
+                <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '0.95rem' }}>3. Attention &amp; output gate</span>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>g_t ⊙ õ_t ∈ ℝ^12,288</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>96 heads × d_h=128 = 12,288 dimensions, channel-modulated by full-rank Sigmoid(W_g x_t).</p>
               </div>
 
               <div style={{ background: '#0F172A', padding: '12px', borderRadius: '6px', border: '1px solid #10B981' }}>
                 <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>4. Residual output</span>
-                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>h_l+1 ∈ ℝ^7,168</div>
-                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>W_o maps the attention output back to the 7,168-d model width.</p>
+                <div style={{ color: '#FFF', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.15rem', marginTop: '4px' }}>h_{'{l+1}'} ∈ ℝ^7,168</div>
+                <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: '4px 0 0 0' }}>W_o maps 12,288 channels back to 7,168 and adds to the residual highway.</p>
               </div>
 
             </div>
@@ -314,12 +321,12 @@ export const MLAOperatorDeepDive: React.FC = () => {
           {/* Theoretical Summary Box */}
           <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
             <h4 style={{ color: '#FFF', margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>
-              Summary: why is the latent width not the model width?
+              Summary: official MLA architectural invariants in Kimi K3
             </h4>
             <ul style={{ color: '#94A3B8', fontSize: '0.98rem', lineHeight: '1.6', margin: 0, paddingLeft: '20px' }}>
-              <li><b>Different roles</b>: the 7,168-d residual stream is the model’s full representation space; the latent KV state is a compact per-token record used by attention.</li>
-              <li><b>Compression is not tokenizer design</b>: the latent is created inside MLA after the model representation already exists. It is not the embedding or vocabulary space.</li>
-              <li><b>Do not invent a ratio</b>: K3 confirms latent KV compression and NoPE MLA, but the report does not disclose enough dimensions here to calculate a single exact cache-reduction factor.</li>
+              <li><b>Authoritative dimensions</b>: Model hidden dimension d = 7,168, KV low-rank compression d_c = 512, 96 attention heads, head dimension d_h = 128 (total attention width 12,288).</li>
+              <li><b>Pure NoPE design</b>: K3 MLA dispenses with decoupled RoPE key caching entirely. Sequence position and recency are naturally handled by the alternating KDA layers in the backbone (3 KDA : 1 MLA ratio).</li>
+              <li><b>Input-dependent full-rank output gate</b>: Unlike standard MLA which projects attention outputs directly, K3 modulates channels via Sigmoid(W_g x_t) ⊙ õ_t where W_g is full rank (12,288 × 7,168).</li>
             </ul>
           </div>
 
@@ -375,13 +382,13 @@ export const MLAOperatorDeepDive: React.FC = () => {
               <g style={{ cursor: 'pointer' }} onClick={() => setSelectedStage('compress')}>
                 <path d="M 140 60 L 260 90 L 260 150 L 140 180 Z" fill="rgba(167, 139, 250, 0.15)" stroke={selectedStage === 'compress' ? '#A78BFA' : 'rgba(167, 139, 250, 0.4)'} strokeWidth="2" />
                 <text x="200" y="125" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">W_c (latent projection)</text>
-                <text x="200" y="142" fill="#94A3B8" fontSize="11" textAnchor="middle">[d_c × 7,168; d_c undisclosed]</text>
+                <text x="200" y="142" fill="#94A3B8" fontSize="11" textAnchor="middle">[d_c × 7,168; d_c = 512]</text>
               </g>
 
               {/* Bottom: NoPE boundary; retained as an interactive teaching node */}
               <g style={{ cursor: 'pointer' }} onClick={() => setSelectedStage('rope')}>
                 <path d="M 140 200 L 260 220 L 260 260 L 140 280 Z" fill="rgba(245, 158, 11, 0.15)" stroke={selectedStage === 'rope' ? '#F59E0B' : 'rgba(245, 158, 11, 0.4)'} strokeWidth="2" />
-                <text x="200" y="245" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">NoPE boundary</text>
+                <text x="200" y="245" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">Pure NoPE boundary</text>
                 <text x="200" y="260" fill="#94A3B8" fontSize="11" textAnchor="middle">no independent positional cache</text>
               </g>
 
@@ -394,7 +401,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
               <g style={{ cursor: 'pointer' }} onClick={() => setSelectedStage('compress')}>
                 <rect x="330" y="105" width="160" height="30" rx="4" fill="url(#gradient-latent)" stroke={selectedStage === 'compress' ? '#FFF' : 'none'} strokeWidth="2" />
                 <text x="410" y="125" fill="#FFF" fontSize="12" fontWeight="bold" textAnchor="middle">c_t^KV (content latent)</text>
-                <text x="410" y="95" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">d_c not disclosed</text>
+                <text x="410" y="95" fill="#A78BFA" fontSize="12" fontWeight="bold" textAnchor="middle">d_c = 512 (official)</text>
               </g>
 
               {/* No independent RoPE key is cached in K3 MLA */}
@@ -404,10 +411,10 @@ export const MLAOperatorDeepDive: React.FC = () => {
                 <text x="370" y="215" fill="#F59E0B" fontSize="12" fontWeight="bold" textAnchor="middle">not MLA KV cache</text>
               </g>
 
-              {/* HIGHLIGHT BOX AROUND KV CACHE (576 dims total) */}
+              {/* HIGHLIGHT BOX AROUND KV CACHE */}
               <rect x="315" y="70" width="190" height="210" rx="8" fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="6,4" />
               <text x="410" y="295" fill="#10B981" fontSize="12" fontWeight="bold" textAnchor="middle">💾 KV cache stores the latent</text>
-              <text x="410" y="312" fill="#10B981" fontSize="11" textAnchor="middle">(d_c is not disclosed; no +64 positional vector)</text>
+              <text x="410" y="312" fill="#10B981" fontSize="11" textAnchor="middle">(d_c = 512; pure NoPE without RoPE key)</text>
 
               {/* CONNECTOR ARROW 3: TO UNPROJECTED MULTI-HEAD MATRIX */}
               <line x1="490" y1="120" x2="580" y2="120" stroke="#A78BFA" strokeWidth="2" strokeDasharray="4,2" />
@@ -427,8 +434,8 @@ export const MLAOperatorDeepDive: React.FC = () => {
                   <rect x="705" y="80" width="16" height="70" rx="2" fill="#38BDF8" />
                   <rect x="770" y="80" width="16" height="70" rx="2" fill="#38BDF8" />
                 </g>
-                <text x="690" y="175" fill="#94A3B8" fontSize="11" textAnchor="middle">[96 heads × d_h; d_h not disclosed]</text>
-                <text x="690" y="190" fill="#EF4444" fontSize="11" fontWeight="bold" textAnchor="middle">❌ A logical expansion is not the cached representation.</text>
+                <text x="690" y="175" fill="#94A3B8" fontSize="11" textAnchor="middle">[96 heads × d_h=128; total 12,288-d]</text>
+                <text x="690" y="190" fill="#EF4444" fontSize="11" fontWeight="bold" textAnchor="middle">❌ Logical view only: avoided via matrix absorption</text>
               </g>
             </svg>
 
@@ -438,23 +445,23 @@ export const MLAOperatorDeepDive: React.FC = () => {
                 <div>
                   <h4 style={{ color: '#38BDF8', margin: '0 0 6px 0', fontSize: '1.1rem' }}>1. Model representation x_t (7,168-d)</h4>
                   <p style={{ color: '#94A3B8', fontSize: '0.98rem', margin: 0, lineHeight: '1.5' }}>
-                    This is the current token’s representation in the Transformer stream. K3 confirms 96 attention heads, while the per-head width is not disclosed. The MHA comparison is a logical tensor view, not a claim about a published head width.
+                    This is the current token’s representation in the Transformer stream (7,168 dimensions). In the 24 MLA layers, this is mapped into 96 attention heads with head dimension d_h = 128 (total attention width 12,288).
                   </p>
                 </div>
               )}
               {selectedStage === 'compress' && (
                 <div>
-                  <h4 style={{ color: '#A78BFA', margin: '0 0 6px 0', fontSize: '1.1rem' }}>2. Latent projection W_c (7,168-d ➔ d_c)</h4>
+                  <h4 style={{ color: '#A78BFA', margin: '0 0 6px 0', fontSize: '1.1rem' }}>2. Latent projection W_c (7,168-d ➔ d_c = 512)</h4>
                   <p style={{ color: '#94A3B8', fontSize: '0.98rem', margin: 0, lineHeight: '1.5' }}>
-                    The projection W_c maps the 7,168-d representation to one compact <b>KV latent c_t^KV</b>. It is shared by the Key and Value reconstruction paths and stored once per token. K3 does not disclose d_c, so the slider is an explicit teaching parameter rather than a published 512-d claim or fixed savings percentage.
+                    The projection W_c maps the 7,168-d representation to one compact <b>KV latent c_t^KV ∈ ℝ^512</b> (official config.json: kv_lora_rank = 512). It is shared by Key and Value reconstruction paths and stored once per token, yielding 48× memory savings vs MHA.
                   </p>
                 </div>
               )}
               {selectedStage === 'rope' && (
                 <div>
-                  <h4 style={{ color: '#F59E0B', margin: '0 0 6px 0', fontSize: '1.1rem' }}>3. NoPE: no independent MLA positional branch</h4>
+                  <h4 style={{ color: '#F59E0B', margin: '0 0 6px 0', fontSize: '1.1rem' }}>3. Pure NoPE: no independent MLA positional branch</h4>
                   <p style={{ color: '#94A3B8', fontSize: '0.98rem', margin: 0, lineHeight: '1.5' }}>
-                    K3 MLA is documented as NoPE: it does not create or cache a separate RoPE positional Key. In the hybrid architecture, KDA provides position-sensitive recurrent mixing and recency information, while MLA supplies global content interaction. The lower lane remains as a teaching checkpoint for this boundary.
+                    K3 MLA is documented as NoPE: it does not create or cache a separate RoPE positional Key. In the hybrid architecture, KDA provides position-sensitive recurrent mixing and recency information, while MLA supplies global content interaction across the 1M context.
                   </p>
                 </div>
               )}
@@ -462,7 +469,7 @@ export const MLAOperatorDeepDive: React.FC = () => {
                 <div>
                   <h4 style={{ color: '#EF4444', margin: '0 0 6px 0', fontSize: '1.1rem' }}>4. Logical multi-head view vs. MLA matrix absorption</h4>
                   <p style={{ color: '#94A3B8', fontSize: '0.98rem', margin: 0, lineHeight: '1.5' }}>
-                    In the logical formulation, the latent can be mapped to per-head Key/Value representations. K3 confirms 96 heads but does not disclose d_c or d_h. <b>Matrix absorption reorders fixed projections so inference need not materialize the full cached Key/Value tensors.</b> This is an implementation principle, not a claim that every internal tensor is absent during training.
+                    In the logical formulation, the latent can be mapped to 96-head Key/Value representations (96 × 128 = 12,288). <b>Matrix absorption reorders fixed projections so inference computes attention directly against c_j^KV, never materializing the full 12,288-d Key/Value tensors in VRAM.</b>
                   </p>
                 </div>
               )}
@@ -610,53 +617,63 @@ q'_t = q_t^C · W_{QK} \\quad \\Rightarrow \\quad Score = q'_t · (c_j^{KV})^T`}
         </div>
       )}
 
-      {/* TAB 3: NOPE / KDA POSITION ROLE GRAPHIC */}
+      {/* TAB 3: PURE NOPE & FULL-RANK OUTPUT GATE GRAPHIC */}
       {activeTab === 'ropeDecouple' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
             <h3 style={{ fontSize: '1.2rem', color: '#F59E0B', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              🧩 NoPE design and the KDA position / recency role
+              🚪 Pure NoPE design &amp; input-dependent full-rank output gate
             </h3>
-            <p style={{ color: '#94A3B8', fontSize: '1rem', margin: 0, lineHeight: '1.5' }}>
-              K3 MLA is documented as NoPE: it does not add an independent positional encoding path to the MLA KV cache. The diagram keeps the two conceptual roles visible: <b>MLA supplies global content interaction</b>, while <b>KDA supplies position-sensitive recurrent mixing and recency</b>.
+            <p style={{ color: '#E2E8F0', fontSize: '1rem', margin: 0, lineHeight: '1.6' }}>
+              Unlike DeepSeek MLA which caches an extra decoupled 64-d RoPE key vector per token, <b>Kimi K3 adopts pure NoPE (No Position Encoding)</b> in all 24 MLA layers. Because the backbone interleaves 3 KDA layers for every MLA layer, KDA recurrent states provide fine-grained positional and recency information. Furthermore, K3 equips MLA with an <b>input-dependent full-rank output gate</b>:
             </p>
+            <div style={{ marginTop: '10px', padding: '10px 14px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.25)', fontFamily: 'monospace', color: '#F59E0B' }}>
+              y_t = W_o [ Sigmoid(W_g x_t) ⊙ õ_t ] \\quad (W_g \\in \\mathbb&#123;R&#125;^{'{12,288 \\times 7,168}'}, \\text&#123;full rank&#125;)
+            </div>
           </div>
 
-          {/* SVG Visual Graphic of RoPE Dual Path */}
+          {/* SVG Visual Graphic of NoPE Attention + Full-Rank Output Gate */}
           <div style={{ background: '#070913', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <svg viewBox="0 0 880 280" width="100%" height="280" style={{ overflow: 'visible' }}>
+            <svg viewBox="0 0 880 300" width="100%" height="300" style={{ overflow: 'visible' }}>
               
               {/* Input Node */}
-              <rect x="20" y="110" width="100" height="60" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="2" />
-              <text x="70" y="145" fill="#FFF" fontSize="14" fontWeight="bold" textAnchor="middle">Input x_t</text>
+              <rect x="20" y="120" width="110" height="60" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="2" />
+              <text x="75" y="146" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Input x_t</text>
+              <text x="75" y="166" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="monospace">ℝ^7,168</text>
 
               {/* Split Paths */}
-              <path d="M 120 130 C 180 130, 180 60, 240 60" stroke="#A78BFA" strokeWidth="2" fill="none" />
-              <path d="M 120 150 C 180 150, 180 220, 240 220" stroke="#F59E0B" strokeWidth="2" fill="none" />
+              <path d="M 130 140 C 180 140, 180 70, 230 70" stroke="#A78BFA" strokeWidth="2" fill="none" />
+              <path d="M 130 160 C 180 160, 180 230, 230 230" stroke="#F59E0B" strokeWidth="2" fill="none" />
 
-              {/* PATH A: SEMANTIC PATH */}
+              {/* PATH A: PURE NoPE ATTENTION CORE */}
               <g>
-                <rect x="240" y="30" width="340" height="60" rx="8" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
-                <text x="410" y="55" fill="#A78BFA" fontSize="14" fontWeight="bold" textAnchor="middle">Path A: MLA content latent c_t^KV (d_c undisclosed)</text>
-                <text x="410" y="75" fill="#94A3B8" fontSize="11" textAnchor="middle">NoPE · fixed projection structure · supports matrix absorption</text>
+                <rect x="230" y="40" width="350" height="60" rx="8" fill="rgba(167, 139, 250, 0.15)" stroke="#A78BFA" strokeWidth="2" />
+                <text x="405" y="65" fill="#A78BFA" fontSize="13" fontWeight="bold" textAnchor="middle">Path A: Pure NoPE Multi-Head Attention</text>
+                <text x="405" y="85" fill="#FFF" fontSize="11" textAnchor="middle">q_t · (W_c c_j^KV)ᵀ → Softmax → õ_t ∈ ℝ^12,288 (96 heads × 128)</text>
               </g>
 
-              {/* PATH B: KDA POSITION / RECENCY ROLE */}
+              {/* PATH B: FULL-RANK OUTPUT GATE */}
               <g>
-                <rect x="240" y="190" width="340" height="60" rx="8" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
-                <text x="410" y="215" fill="#F59E0B" fontSize="14" fontWeight="bold" textAnchor="middle">Path B: KDA recurrent state</text>
-                <text x="410" y="235" fill="#94A3B8" fontSize="11" textAnchor="middle">position-sensitive mixing and recency · not an MLA KV cache vector</text>
+                <rect x="230" y="200" width="350" height="60" rx="8" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
+                <text x="405" y="225" fill="#F59E0B" fontSize="13" fontWeight="bold" textAnchor="middle">Path B: Input-dependent Full-Rank Output Gate</text>
+                <text x="405" y="245" fill="#FFF" fontSize="11" textAnchor="middle">g_t = Sigmoid(W_g x_t) ∈ ℝ^12,288 (full rank, no low-rank bottleneck)</text>
               </g>
 
-              {/* CONVERGENCE AT ATTENTION SCORE */}
-              <path d="M 580 60 C 660 60, 660 130, 720 130" stroke="#A78BFA" strokeWidth="2" fill="none" />
-              <path d="M 580 220 C 660 220, 660 150, 720 140" stroke="#F59E0B" strokeWidth="2" fill="none" />
+              {/* CONVERGENCE AT MODULATION NODE */}
+              <path d="M 580 70 C 640 70, 640 135, 680 142" stroke="#A78BFA" strokeWidth="2" fill="none" />
+              <path d="M 580 230 C 640 230, 640 165, 680 158" stroke="#F59E0B" strokeWidth="2" fill="none" />
 
-              {/* Final Score Node */}
-              <rect x="720" y="110" width="140" height="60" rx="8" fill="rgba(16, 185, 129, 0.2)" stroke="#10B981" strokeWidth="2" />
-              <text x="790" y="135" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Attention Score</text>
-              <text x="790" y="155" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">MLA content score + KDA context</text>
+              {/* Element-wise Multiplication Node */}
+              <circle cx="680" cy="150" r="16" fill="#0F172A" stroke="#10B981" strokeWidth="2.5" />
+              <text x="680" y="156" fill="#10B981" fontSize="18" fontWeight="bold" textAnchor="middle">⊙</text>
+              <text x="680" y="125" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">g_t ⊙ õ_t</text>
+
+              {/* Output Projection Node */}
+              <line x1="696" y1="150" x2="740" y2="150" stroke="#10B981" strokeWidth="2" />
+              <rect x="740" y="120" width="120" height="60" rx="8" fill="rgba(16, 185, 129, 0.2)" stroke="#10B981" strokeWidth="2" />
+              <text x="800" y="145" fill="#FFF" fontSize="13" fontWeight="bold" textAnchor="middle">Output W_o</text>
+              <text x="800" y="165" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">y_t ∈ ℝ^7,168</text>
 
             </svg>
           </div>
@@ -673,7 +690,7 @@ q'_t = q_t^C · W_{QK} \\quad \\Rightarrow \\quad Score = q'_t · (c_j^{KV})^T`}
               📊 Interactive memory comparison and calculator
             </h3>
             <p style={{ color: '#94A3B8', fontSize: '1rem', margin: 0 }}>
-              Compare the illustrative cache scaling. K3 is trained for a 1M-token context, while the exact cache bytes depend on undisclosed widths, dtype, batch size, and implementation.
+              Calculated using authoritative Kimi K3 specifications: 93 layers (69 O(1) KDA recurrent layers + 24 MLA low-rank layers with d_c = {compressDim}), 96 heads, d_h = 128, BF16/FP16 (2 bytes/float).
             </p>
           </div>
 
@@ -715,7 +732,7 @@ q'_t = q_t^C · W_{QK} \\quad \\Rightarrow \\quad Score = q'_t · (c_j^{KV})^T`}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#94A3B8' }}>Latent width d_c (teaching):</span>
+                  <span style={{ color: '#94A3B8' }}>Latent width d_c (official = 512):</span>
                   <span style={{ color: '#10B981', fontWeight: 'bold', fontFamily: 'monospace' }}>{compressDim}</span>
                 </div>
                 <input
@@ -731,13 +748,13 @@ q'_t = q_t^C · W_{QK} \\quad \\Rightarrow \\quad Score = q'_t · (c_j^{KV})^T`}
 
             {/* Visual Bar Comparison Chart */}
             <div style={{ background: '#070913', padding: '18px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>Per-layer KV cache comparison (illustrative GB)</span>
+              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>Full-Model KV Cache Comparison (GiB in FP16)</span>
 
               {/* Bar 1: Standard MHA */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#EF4444', fontWeight: 'bold' }}>❌ MHA baseline (96 heads; teaching head width)</span>
-                  <span style={{ color: '#EF4444', fontWeight: 'bold', fontFamily: 'monospace' }}>{mhaMemoryGB} GB</span>
+                  <span style={{ color: '#EF4444', fontWeight: 'bold' }}>❌ 93-Layer Standard MHA (96 heads, d_h=128, 2×K,V)</span>
+                  <span style={{ color: '#EF4444', fontWeight: 'bold', fontFamily: 'monospace' }}>{mhaMemoryGB} GiB</span>
                 </div>
                 <div style={{ width: '100%', height: '24px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
                   <div style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, #EF4444 0%, #DC2626 100%)', borderRadius: '4px' }} />
@@ -747,16 +764,16 @@ q'_t = q_t^C · W_{QK} \\quad \\Rightarrow \\quad Score = q'_t · (c_j^{KV})^T`}
               {/* Bar 2: Kimi K3 MLA */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
-                  <span style={{ color: '#10B981', fontWeight: 'bold' }}>✅ Kimi K3 Gated MLA (latent width is teaching-only)</span>
-                  <span style={{ color: '#10B981', fontWeight: 'bold', fontFamily: 'monospace' }}>{mlaMemoryGB} GB</span>
+                  <span style={{ color: '#10B981', fontWeight: 'bold' }}>✅ 24-Layer Kimi K3 Gated MLA (latent KV d_c={compressDim})</span>
+                  <span style={{ color: '#10B981', fontWeight: 'bold', fontFamily: 'monospace' }}>{mlaMemoryGB} GiB</span>
                 </div>
                 <div style={{ width: '100%', height: '24px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.max(2, (parseFloat(mlaMemoryGB) / parseFloat(mhaMemoryGB)) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #10B981 0%, #34D399 100%)', borderRadius: '4px', transition: 'width 0.3s ease-in-out' }} />
+                  <div style={{ width: `${Math.max(2, (parseFloat(mlaMemoryGB) / Math.max(0.01, parseFloat(mhaMemoryGB))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #10B981 0%, #34D399 100%)', borderRadius: '4px', transition: 'width 0.3s ease-in-out' }} />
                 </div>
               </div>
 
               <div style={{ marginTop: '10px', background: 'rgba(16, 185, 129, 0.1)', padding: '14px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10B981', fontWeight: 'bold', fontSize: '1.05rem', textAlign: 'center' }}>
-                ℹ️ Illustrative ratio: {savingsRatio}×. It is not a published K3 memory factor; actual bytes depend on undisclosed dimensions and runtime choices.
+                🚀 Memory Reduction Ratio: {(parseFloat(mhaMemoryGB) / Math.max(0.01, parseFloat(mlaMemoryGB))).toFixed(1)}× less KV Cache footprint for the 24 MLA layers vs standard MHA (per-layer compression {savingsRatio}×). Combined with 69 constant O(1) KDA layers, K3 achieves total cache scalability up to 1M tokens!
               </div>
 
             </div>

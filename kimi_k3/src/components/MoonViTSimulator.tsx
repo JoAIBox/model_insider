@@ -1,5 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// Sample image options (4x4 grids)
+const IMAGES_MOCK = [
+  [
+    ['#FF5555', '#FF5555', '#38BDF8', '#38BDF8'],
+    ['#FF5555', '#FF5555', '#38BDF8', '#38BDF8'],
+    ['#10B981', '#10B981', '#FFB000', '#FFB000'],
+    ['#10B981', '#10B981', '#FFB000', '#FFB000']
+  ],
+  [
+    ['#38BDF8', '#FFF', '#FFF', '#38BDF8'],
+    ['#FFF', '#38BDF8', '#38BDF8', '#FFF'],
+    ['#FFF', '#38BDF8', '#38BDF8', '#FFF'],
+    ['#38BDF8', '#FFF', '#FFF', '#38BDF8']
+  ],
+  [
+    ['#FFB000', '#FFB000', '#FFB000', '#FFB000'],
+    ['#FFB000', '#10B981', '#10B981', '#FFB000'],
+    ['#FFB000', '#10B981', '#10B981', '#FFB000'],
+    ['#FFB000', '#FFB000', '#FFB000', '#FFB000']
+  ]
+];
+
 export const MoonViTSimulator: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pixelShuffle' | 'factorizedAttn' | 'stability'>('pixelShuffle');
   const isPlaying = true;
@@ -23,28 +45,6 @@ export const MoonViTSimulator: React.FC = () => {
   const reportPatchesPerSide = reportResolution / reportPatchSize;
   const reportPatchTokens = reportPatchesPerSide * reportPatchesPerSide;
   const reportPackedTokens = reportPatchTokens / 4;
-
-  // Sample image options (4x4 grids)
-  const imagesMock = [
-    [
-      ['#FF5555', '#FF5555', '#38BDF8', '#38BDF8'],
-      ['#FF5555', '#FF5555', '#38BDF8', '#38BDF8'],
-      ['#10B981', '#10B981', '#FFB000', '#FFB000'],
-      ['#10B981', '#10B981', '#FFB000', '#FFB000']
-    ],
-    [
-      ['#38BDF8', '#FFF', '#FFF', '#38BDF8'],
-      ['#FFF', '#38BDF8', '#38BDF8', '#FFF'],
-      ['#FFF', '#38BDF8', '#38BDF8', '#FFF'],
-      ['#38BDF8', '#FFF', '#FFF', '#38BDF8']
-    ],
-    [
-      ['#FFB000', '#FFB000', '#FFB000', '#FFB000'],
-      ['#FFB000', '#10B981', '#10B981', '#FFB000'],
-      ['#FFB000', '#10B981', '#10B981', '#FFB000'],
-      ['#FFB000', '#FFB000', '#FFB000', '#FFB000']
-    ]
-  ];
 
   // Trigger patch slicing animation
   const handleSliceClick = () => {
@@ -93,7 +93,7 @@ export const MoonViTSimulator: React.FC = () => {
         ctx.fillText('Patch Segmentation &', width * 0.46, 24);
         ctx.fillText('Embedding (14×14×3)', width * 0.46, 42);
 
-        const currentImg = imagesMock[selectedImgIdx];
+        const currentImg = IMAGES_MOCK[selectedImgIdx];
         const cellSize = 30;
         const gridX = 40;
         const gridY = 60;

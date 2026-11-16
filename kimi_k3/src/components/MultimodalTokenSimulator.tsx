@@ -4,15 +4,15 @@ import React, { useState, useEffect, useRef } from 'react';
 const pipelineSteps = [
   { id: 0, title: "1. Text BPE tokenization and embedding lookup", desc: "Text string ➔ BPE token IDs ➔ W_emb[ID] lookup to produce a 7,168-d text vector", output: "x_text ∈ ℝ^7,168", type: "text" },
   { id: 1, title: "2. Image patchification at 14×14", desc: "Teaching geometry: a 28×28 image ➔ four 14×14×3 (588-value) RGB patches. K3 confirms the 14×14 patch size; this four-patch example is illustrative.", output: "Patch x_p ∈ ℝ^(4 × 588 values) (teaching example)", type: "vision" },
-  { id: 2, title: "3. 512-filter dot-product feature extraction (teaching example)", desc: "Teaching implementation: 512 separate 14×14×3 filters produce four 512-d feature vectors. K3 identifies MoonViT-V2 but does not disclose this 512-channel Conv2d stage.", output: "f_vit ∈ ℝ^(4 × 512) (teaching example)", type: "vision" },
-  { id: 3, title: "4. 2×2 Pixel Shuffle token packing", desc: "Teaching geometry: four 512-d vectors are flattened and packed into one 2,048-value visual token, reducing this example’s token count by 75%. K3 confirms 2×2 Pixel Shuffle and a 4× reduction; these widths are illustrative.", output: "v_2048 ∈ ℝ^2,048 (1 token; teaching example)", type: "vision" },
-  { id: 4, title: "5. W_proj projection into the shared space (teaching dimensions)", desc: "Teaching matrix view: W_proj [7,168×2,048] maps the packed visual vector into the 7,168-d shared backbone space. K3 confirms a lightweight MLP projector and the 7,168-d target, not this exact matrix shape.", output: "x_vis ∈ ℝ^7,168", type: "vision" },
-  { id: 5, title: "6. Interleaved sequence assembly", desc: "[prefix text ➔ visual token ➔ suffix text] is assembled into Stream X and sent through the 93-layer backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
-  { id: 6, title: "7. 160K-vocabulary autoregressive decoding", desc: "Backbone output h_t ➔ W_unembed [160,000×7,168] vocabulary logits ➔ sample one next token ↺ append it to the context", output: "1 next token (t=N+1)", type: "decoder" }
+  { id: 2, title: "3. MoonViT-V2 patch feature extraction", desc: "MoonViT-V2 (27 layers, hidden size 1,024) encodes 14×14 patches into 1,024-d visual feature representations.", output: "f_vit ∈ ℝ^(N × 1,024)", type: "vision" },
+  { id: 3, title: "4. 2×2 Pixel Shuffle token downsampling", desc: "2×2 spatial pixel shuffle packs 4 adjacent visual patches into a single 4,096-d token (4× spatial sequence compression).", output: "v_4096 ∈ ℝ^(N/4 × 4,096)", type: "vision" },
+  { id: 4, title: "5. MLP projector into 7,168-d language space", desc: "Two-layer MLP projector maps the 4,096-d downsampled visual tokens into the 7,168-d LLM hidden state space.", output: "x_img ∈ ℝ^(N/4 × 7,168)", type: "vision" },
+  { id: 5, title: "6. Interleaved sequence assembly", desc: "[prefix text ➔ visual tokens ➔ suffix text] is assembled into Stream X and sent through the 93-layer backbone", output: "Stream X ∈ ℝ^(T × 7,168)", type: "backbone" },
+  { id: 6, title: "7. 163,840-vocabulary autoregressive decoding", desc: "Backbone output h_t ➔ W_unembed [163,840×7,168] vocabulary logits ➔ sample one next token ↺ append it to context", output: "1 next token (t=N+1)", type: "decoder" }
 ];
 
 export const MultimodalTokenSimulator: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'patchEncoder' | 'pixelShuffle' | 'latentSpace' | 'decoder'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patchEncoder' | 'pixelShuffle' | 'latentSpace' | 'projector'>('overview');
   
   // Interactive Prompt State
   const [prefixText, setPrefixText] = useState<string>('Show me');
@@ -36,7 +36,8 @@ export const MultimodalTokenSimulator: React.FC = () => {
   // Interactive Patch selection for Step 2 & 3
   const [selectedPatchGroup, setSelectedPatchGroup] = useState<number>(0);
   const [selectedFilterIdx, setSelectedFilterIdx] = useState<number>(12);
-  const [reconOpacity, setReconOpacity] = useState<number>(85);
+  const [projRes, setProjRes] = useState<number>(448);
+  const [selectedProjStage, setSelectedProjStage] = useState<number>(3);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -147,19 +148,19 @@ export const MultimodalTokenSimulator: React.FC = () => {
             4. 7,168-d shared backbone space
           </button>
           <button
-            onClick={() => setActiveTab('decoder')}
+            onClick={() => setActiveTab('projector')}
             style={{
               padding: '8px 14px',
               borderRadius: '6px',
               border: 'none',
-              background: activeTab === 'decoder' ? '#EC4899' : 'transparent',
-              color: activeTab === 'decoder' ? '#000' : '#94A3B8',
+              background: activeTab === 'projector' ? '#EC4899' : 'transparent',
+              color: activeTab === 'projector' ? '#000' : '#94A3B8',
               fontWeight: 'bold',
               fontSize: '0.95rem',
               cursor: 'pointer'
             }}
           >
-            5. Reconstruction teaching view
+            5. MoonViT-V2 &amp; MLP Projector forward flow
           </button>
         </div>
       </div>
@@ -217,7 +218,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                {genStep < vocabSampleTokens.length ? `↻ Predict next token from the 160K vocabulary (t=N+${genStep + 1})` : '🔄 Reset context'}
+                {genStep < vocabSampleTokens.length ? `↻ Predict next token from the 163,840 vocabulary (t=N+${genStep + 1})` : '🔄 Reset context'}
               </button>
             </div>
 
@@ -265,7 +266,7 @@ export const MultimodalTokenSimulator: React.FC = () => {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.1rem', color: '#38BDF8', margin: 0, fontWeight: 'bold' }}>
-                  🎬 Panel 1: multimodal token flow and 160K-vocabulary autoregressive graph
+                  🎬 Panel 1: multimodal token flow and 163,840-vocabulary autoregressive graph
                 </h3>
                 <span style={{ fontSize: '0.85rem', background: '#0F172A', color: '#38BDF8', padding: '3px 10px', borderRadius: '4px', fontFamily: 'monospace' }}>
                   Step {stepIdx + 1}/{pipelineSteps.length}: {currentStep.title}
@@ -431,37 +432,37 @@ export const MultimodalTokenSimulator: React.FC = () => {
                           <g transform="translate(496, 0)">
                             <rect x="0" y="0" width="90" height="32" rx="4" fill="#F59E0B" />
                             <text x="45" y="16" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">Next Token y_t</text>
-                            <text x="45" y="27" fill="#000" fontSize="8" fontFamily="monospace" textAnchor="middle">one token from 160K</text>
+                            <text x="45" y="27" fill="#000" fontSize="8" fontFamily="monospace" textAnchor="middle">one token from 163,840</text>
                           </g>
                         </>
                       )}
                     </g>
                   </g>
 
-                  {/* === SECTION 3: BACKWARD / DECODING RECONSTRUCTION GRAPH & LOOPBACK === */}
+                  {/* === SECTION 3: AUTOREGRESSIVE VOCABULARY DECODING GRAPH & LOOPBACK === */}
                   <line x1="430" y1="325" x2="430" y2="355" stroke="#EC4899" strokeWidth="2.5" markerEnd="url(#arrow-pink)" />
 
                   {/* 7. DECODING PIPELINE BOX */}
                   <g opacity={stepIdx === 6 || genStep > 0 ? 1 : 0.6} style={{ transition: 'all 0.3s' }}>
                     <rect x="60" y="360" width="740" height="100" rx="8" fill="rgba(236, 72, 153, 0.1)" stroke="#EC4899" strokeWidth={stepIdx === 6 ? 3 : 1.5} />
                     <text x="430" y="384" fill="#EC4899" fontSize="14" fontWeight="bold" textAnchor="middle">
-                      7. One-step 160K-vocabulary decoding and autoregressive append
+                      7. One-step 163,840-vocabulary decoding and autoregressive append
                     </text>
 
-                    {/* Left Decoder Branch: 160K Vocabulary Text Decoding */}
+                    {/* Left Decoder Branch: 163,840 Vocabulary Text Decoding */}
                     <g transform="translate(80, 396)">
                       <rect x="0" y="0" width="310" height="52" rx="6" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" />
-                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 W_unembed [160,000×7,168] vocabulary logits</text>
+                      <text x="155" y="20" fill="#38BDF8" fontSize="11" fontWeight="bold" textAnchor="middle">🔤 W_unembed [163,840×7,168] logits</text>
                       <text x="155" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">
-                        {genStep === 0 ? 'h_t ➔ 160K logits ➔ Softmax ➔ sample 1 next token' : `sampled token (t=N+${genStep}): ${vocabSampleTokens[genStep - 1]?.token}`}
+                        {genStep === 0 ? 'h_t ➔ 163,840 logits ➔ Softmax ➔ sample 1 token' : `sampled token (t=N+${genStep}): ${vocabSampleTokens[genStep - 1]?.token}`}
                       </text>
                     </g>
 
-                    {/* Right Decoder Branch: Image Reconstruction */}
+                    {/* Right Decoder Branch: Sampling & Selection */}
                     <g transform="translate(420, 396)">
-                      <rect x="0" y="0" width="360" height="52" rx="6" fill="#0F172A" stroke="#EC4899" strokeWidth="1" />
-                      <text x="180" y="20" fill="#EC4899" fontSize="11" fontWeight="bold" textAnchor="middle">🖼️ Reconstruction teaching view</text>
-                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">not a documented K3 inverse decoder</text>
+                      <rect x="0" y="0" width="360" height="52" rx="6" fill="#0F172A" stroke="#10B981" strokeWidth="1" />
+                      <text x="180" y="20" fill="#10B981" fontSize="11" fontWeight="bold" textAnchor="middle">🎲 Temperature Softmax &amp; Top-p Sampling</text>
+                      <text x="180" y="38" fill="#FFF" fontSize="10" fontFamily="monospace" textAnchor="middle">P(y_t) = Softmax(z/T) ➔ categorical sampling</text>
                     </g>
                   </g>
 
@@ -481,11 +482,11 @@ export const MultimodalTokenSimulator: React.FC = () => {
                 </svg>
 
                 <div style={{ background: '#0F172A', padding: '10px 14px', borderRadius: '6px', fontSize: '0.88rem', color: '#94A3B8', marginTop: '6px' }}>
-                  💡 <b>Report-grounded facts and explicit teaching assumptions:</b>
+                  💡 <b>Report-grounded facts and architecture invariants:</b>
                   <br />
-                  1. <b>Visual-token count</b>: the report confirms 14×14 patchification and 2×2 Pixel Shuffle, which reduces the visual-token count by 4×. The 512-channel, 2,048-d, and 28×28 values in the detailed teaching panels are illustrative—not disclosed K3 parameters.
+                  1. <b>Visual-token count</b>: MoonViT-V2 applies 14×14 patchification and 2×2 Pixel Shuffle, which downsamples spatial visual-tokens by 4× before the 2-layer MLP projector.
                   <br />
-                  2. <b>One-token autoregression</b>: at each decoding step, W_unembed scores the <b>160,000-token vocabulary</b>, one next token is selected, and that token is appended to the context for the next step.
+                  2. <b>One-token autoregression</b>: at each decoding step, W_unembed scores the <b>163,840-token vocabulary (160K display)</b>, one next token is sampled and appended to the context for the next autoregressive step.
                 </div>
               </div>
 
@@ -550,9 +551,9 @@ export const MultimodalTokenSimulator: React.FC = () => {
                   <div style={{ background: '#0B0F19', padding: '12px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#E2E8F0', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <div style={{ color: '#64748B', marginBottom: '4px' }}># PyTorch-style forward path and autoregressive loopback:</div>
                     <div style={{ color: stepIdx === 0 ? '#38BDF8' : '#64748B' }}>x_txt = self.w_emb(text_ids)  # [B, T_txt, 7168]</div>
-                    <div style={{ color: stepIdx === 2 ? '#10B981' : '#64748B' }}>f_vit = self.moonvit_v2(patches)  # visual width undisclosed</div>
-                    <div style={{ color: stepIdx === 3 ? '#F59E0B' : '#64748B' }}>v = pixel_shuffle(f_vit, r=2)  # visual tokens: N/4</div>
-                    <div style={{ color: stepIdx === 4 ? '#10B981' : '#64748B' }}>x_img = self.projector(v)  # [B, N/4, 7168]</div>
+                    <div style={{ color: stepIdx === 2 ? '#10B981' : '#64748B' }}>f_vit = self.moonvit_v2(patches)  # [B, N, 1024] (27 layers, hidden 1024)</div>
+                    <div style={{ color: stepIdx === 3 ? '#F59E0B' : '#64748B' }}>v = pixel_shuffle(f_vit, r=2)     # [B, N/4, 4096] (4x spatial downsampling)</div>
+                    <div style={{ color: stepIdx === 4 ? '#10B981' : '#64748B' }}>x_img = self.projector(v)         # [B, N/4, 7168] (MLP 4096-&gt;4096-&gt;7168)</div>
                     <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}># Autoregressive loopback:</div>
                     <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}>y_next = torch.argmax(self.w_unembed(h_t))</div>
                     <div style={{ color: genStep > 0 ? '#F59E0B' : '#64748B' }}>seq_stream.append(self.w_emb(y_next))</div>
@@ -893,69 +894,229 @@ export const MultimodalTokenSimulator: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 5: INVERSE DECODER RECONSTRUCTION */}
-      {activeTab === 'decoder' && (
+      {/* TAB 5: MOONVIT-V2 & MLP PROJECTOR FORWARD FLOW */}
+      {activeTab === 'projector' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ background: '#070913', padding: '16px', borderRadius: '8px', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
-            <h3 style={{ fontSize: '1.2rem', color: '#EC4899', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-              🔄 Reconstruction teaching view (not a documented K3 inverse decoder)
-            </h3>
-            <p style={{ color: '#94A3B8', fontSize: '1.05rem', margin: 0, lineHeight: '1.5' }}>
-              This panel preserves an intuitive inverse-style visualization for teaching. K3’s report confirms visual-token compression and projection into the backbone space, but does not specify an inverse `ConvTranspose2d` decoder or guarantee lossless recovery. The 2,048/512/28×28 values are example geometry only.
+          {/* Header Banner Clarifying Forward Multimodal Architecture */}
+          <div style={{ background: '#070913', padding: '16px 20px', borderRadius: '8px', border: '1px solid rgba(236, 72, 153, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.4rem' }}>👁️</span>
+                <h3 style={{ fontSize: '1.2rem', color: '#EC4899', margin: 0, fontWeight: 'bold' }}>
+                  Forward Vision Pipeline: MoonViT-V2 ➔ 2×2 Pixel Shuffle ➔ MLP Projector
+                </h3>
+              </div>
+              <span style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#EC4899', border: '1px solid #EC4899', padding: '3px 10px', borderRadius: '12px', fontSize: '0.82rem', fontFamily: 'monospace' }}>
+                Pure Forward Multimodal LLM (No Inverse Image Decoder)
+              </span>
+            </div>
+            <p style={{ color: '#94A3B8', fontSize: '0.98rem', margin: '8px 0 0 0', lineHeight: '1.5' }}>
+              Kimi-K3 does not employ an inverse image reconstruction decoder (e.g. <code>ConvTranspose2d</code>). It is an autoregressive generative model: visual tokens are extracted forward, compressed by 4× via 2×2 Pixel Shuffle, projected into the 7,168-d language space, and concatenated into the sequence to autoregressively decode text/reasoning tokens via the 163,840-token vocabulary.
             </p>
           </div>
 
-          {/* Interactive Reconstruction Inspection Panel */}
-          <div style={{ background: '#070913', padding: '20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '1.05rem', color: '#FFF', fontWeight: 'bold' }}>
-                Reconstruction illustration opacity:
-              </span>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <span style={{ color: '#94A3B8', fontSize: '0.95rem' }}>Input illustration</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={reconOpacity}
-                  onChange={(e) => setReconOpacity(parseInt(e.target.value))}
-                  style={{ width: '180px' }}
-                />
-                <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem', fontFamily: 'monospace' }}>
-                  Illustration opacity: {reconOpacity}%
-                </span>
+          {/* Interactive Resolution & Pipeline Configurator */}
+          <div style={{ background: '#070913', padding: '18px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ color: '#FFF', fontWeight: 'bold', fontSize: '1rem' }}>Input Resolution (H × W):</span>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {[
+                    { label: '224×224 (Fast)', val: 224 },
+                    { label: '448×448 (Standard)', val: 448 },
+                    { label: '896×896 (High-Res)', val: 896 },
+                    { label: '3584×3584 (Max K3)', val: 3584 }
+                  ].map((preset) => (
+                    <button
+                      key={preset.val}
+                      onClick={() => setProjRes(preset.val)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '6px',
+                        border: projRes === preset.val ? '1px solid #EC4899' : '1px solid rgba(255,255,255,0.1)',
+                        background: projRes === preset.val ? 'rgba(236, 72, 153, 0.2)' : '#0F172A',
+                        color: projRes === preset.val ? '#FFF' : '#94A3B8',
+                        fontWeight: projRes === preset.val ? 'bold' : 'normal',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Compression Metric Badge */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10B981', padding: '6px 14px', borderRadius: '8px', color: '#10B981', fontSize: '0.88rem', fontFamily: 'monospace' }}>
+                ⚡ 4× Sequence Compression: <b>{((projRes / 14) ** 2).toLocaleString()}</b> patches ➔ <b>{(((projRes / 14) ** 2) / 4).toLocaleString()}</b> LLM tokens
               </div>
             </div>
 
-            {/* Side by side comparison */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '30px', alignItems: 'center', flexWrap: 'wrap', padding: '20px 0' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '160px', height: '160px', background: '#000', borderRadius: '8px', border: '2px solid #38BDF8', overflow: 'hidden', position: 'relative' }}>
-                  <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #10B981 0%, #38BDF8 50%, #A78BFA 100%)' }} />
+            {/* Visual Pipeline Stage Flow Diagram */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '8px' }}>
+              {[
+                {
+                  step: 1,
+                  title: '1. 14×14 Patchify',
+                  color: '#38BDF8',
+                  tensor: `[${((projRes / 14) ** 2).toLocaleString()}, 588]`,
+                  desc: `Patches: ${(projRes / 14)}×${(projRes / 14)} = ${((projRes / 14) ** 2).toLocaleString()} (14×14×3 values/patch)`
+                },
+                {
+                  step: 2,
+                  title: '2. MoonViT-V2',
+                  color: '#A78BFA',
+                  tensor: `[${((projRes / 14) ** 2).toLocaleString()}, 1024]`,
+                  desc: '401M params, 27 layers, 1024-d, 12 heads. Shared image/video encoder'
+                },
+                {
+                  step: 3,
+                  title: '3. 2×2 Pixel Shuffle',
+                  color: '#10B981',
+                  tensor: `[${(((projRes / 14) ** 2) / 4).toLocaleString()}, 4096]`,
+                  desc: '4× spatial compression: 4 patches packed into one 4,096-d token'
+                },
+                {
+                  step: 4,
+                  title: '4. 2-Layer MLP Projector',
+                  color: '#EC4899',
+                  tensor: `[${(((projRes / 14) ** 2) / 4).toLocaleString()}, 7168]`,
+                  desc: 'MLP: 4096 ➔ 4096 ➔ 7168. Linear + GELU + Linear projection'
+                },
+                {
+                  step: 5,
+                  title: '5. LLM Backbone Stream',
+                  color: '#F59E0B',
+                  tensor: '[T_total, 7168]',
+                  desc: 'Interleaved with text tokens into Stream X ➔ 93-layer backbone ➔ Vocab logits'
+                }
+              ].map((stage) => {
+                const isSelected = selectedProjStage === stage.step;
+                return (
+                  <div
+                    key={stage.step}
+                    onClick={() => setSelectedProjStage(stage.step)}
+                    style={{
+                      background: isSelected ? 'rgba(255,255,255,0.06)' : '#090D16',
+                      border: isSelected ? `2px solid ${stage.color}` : '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: stage.color, fontWeight: 'bold', fontSize: '0.9rem' }}>{stage.title}</span>
+                      <span style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontFamily: 'monospace', color: '#FFF' }}>
+                        Step {stage.step}
+                      </span>
+                    </div>
+                    <div style={{ color: '#FFF', fontFamily: 'monospace', fontSize: '0.88rem', fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '4px 8px', borderRadius: '4px' }}>
+                      Tensor: {stage.tensor}
+                    </div>
+                    <div style={{ color: '#94A3B8', fontSize: '0.8rem', lineHeight: '1.4' }}>
+                      {stage.desc}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Detailed Stage Deep-Dive Card */}
+            <div style={{ background: '#090D16', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', marginTop: '6px' }}>
+              {selectedProjStage === 1 && (
+                <div>
+                  <h4 style={{ color: '#38BDF8', margin: '0 0 8px 0', fontSize: '1.05rem' }}>📐 Stage 1: 14×14 Patchification Details</h4>
+                  <p style={{ color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                    The input image of resolution {projRes}×{projRes} with 3 color channels is split into non-overlapping 14×14 patches.
+                    Total patches: <code>({projRes} / 14) × ({projRes} / 14) = {((projRes / 14) ** 2).toLocaleString()}</code> patches.
+                    Each patch contains 14 × 14 × 3 = 588 raw RGB values, linearly projected into the 1,024-d MoonViT-V2 embedding space.
+                  </p>
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: '0.85rem', color: '#38BDF8' }}>
+                    <span>• Patch size: 14×14 px</span>
+                    <span>• Patch grid: {projRes / 14} × {projRes / 14}</span>
+                    <span>• Patch dimension: 588-d</span>
+                  </div>
                 </div>
-                <span style={{ color: '#38BDF8', fontWeight: 'bold', fontSize: '0.95rem' }}>1. Input image illustration</span>
-                <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>Example RGB grid: 28×28×3</span>
-              </div>
+              )}
 
-              <div style={{ fontSize: '1.8rem', color: '#EC4899' }}>➔</div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <div style={{ background: '#0F172A', border: '2px solid #EC4899', padding: '12px 18px', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '1rem' }}>One 2,048-value example token</div>
-                  <div style={{ color: '#94A3B8', fontSize: '0.85rem', marginTop: '4px' }}>Un-shuffle into 4 × 512-value segments</div>
+              {selectedProjStage === 2 && (
+                <div>
+                  <h4 style={{ color: '#A78BFA', margin: '0 0 8px 0', fontSize: '1.05rem' }}>🔮 Stage 2: MoonViT-V2 Vision Transformer Specification</h4>
+                  <p style={{ color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                    MoonViT-V2 is a dedicated 401M-parameter vision foundation model trained from scratch. It features 27 Transformer encoder layers with hidden dimension 1,024, QKV projection width 1,536, and 12 attention heads (head dim 128 = 1,536 / 12). It uses factorized spatial and temporal self-attention to process both static images and dynamic video clips with unified parameters.
+                  </p>
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: '0.85rem', color: '#A78BFA' }}>
+                    <span>• Parameters: 401M</span>
+                    <span>• Depth: 27 Layers</span>
+                    <span>• Hidden Dim: 1,024</span>
+                    <span>• Heads: 12 (qkv width: 1,536, head dim: 128)</span>
+                    <span>• Output: [{((projRes / 14) ** 2).toLocaleString()}, 1,024]</span>
+                  </div>
                 </div>
-                <span style={{ color: '#EC4899', fontWeight: 'bold', fontSize: '0.95rem' }}>2. Packed feature representation</span>
-              </div>
+              )}
 
-              <div style={{ fontSize: '1.8rem', color: '#EC4899' }}>➔</div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '160px', height: '160px', background: '#000', borderRadius: '8px', border: '2px solid #10B981', overflow: 'hidden', opacity: reconOpacity / 100 }}>
-                  <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #10B981 0%, #38BDF8 50%, #A78BFA 100%)' }} />
+              {selectedProjStage === 3 && (
+                <div>
+                  <h4 style={{ color: '#10B981', margin: '0 0 8px 0', fontSize: '1.05rem' }}>🔀 Stage 3: 2×2 Pixel Shuffle Spatial Downsampling</h4>
+                  <p style={{ color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                    Processing all raw visual patches through the 93-layer language backbone would cause quadratic attention compute bottlenecks. 2×2 Pixel Shuffle packs groups of 2×2 adjacent visual tokens into a single combined token:
+                    the spatial sequence length shrinks strictly by <b>4×</b> (from {((projRes / 14) ** 2).toLocaleString()} down to {(((projRes / 14) ** 2) / 4).toLocaleString()} tokens), while the channel dimension expands from 1,024 to <b>4,096</b> (1,024 × 4).
+                  </p>
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: '0.85rem', color: '#10B981' }}>
+                    <span>• Sequence length reduction: 75% savings</span>
+                    <span>• Channel expansion: 1,024 ➔ 4,096</span>
+                    <span>• Packed token count: {(((projRes / 14) ** 2) / 4).toLocaleString()}</span>
+                    <span>• Information loss: 0% (lossless spatial reshape)</span>
+                  </div>
                 </div>
-                <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.95rem' }}>3. Schematic visual reconstruction</span>
-                <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>Illustration only; no K3 MSE claim or inverse decoder specified.</span>
-              </div>
+              )}
+
+              {selectedProjStage === 4 && (
+                <div>
+                  <h4 style={{ color: '#EC4899', margin: '0 0 8px 0', fontSize: '1.05rem' }}>🚀 Stage 4: 2-Layer MLP Projector Specification</h4>
+                  <p style={{ color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                    A two-layer multi-layer perceptron (MLP) bridges the vision encoder representation with Kimi-K3’s 7,168-dimensional language backbone hidden state space.
+                    The projection computes: <code>x_img = RMSNorm(W₂ · GELU(W₁ · v_packed))</code> where <code>W₁ ∈ ℝ^(4096×4096)</code> and <code>W₂ ∈ ℝ^(7168×4096)</code>, followed by an output RMSNorm (matching official <code>modeling_kimi_k3.py</code> reference implementation).
+                  </p>
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: '0.85rem', color: '#EC4899' }}>
+                    <span>• Layer 1: 4,096 ➔ 4,096 with non-linear activation</span>
+                    <span>• Layer 2: 7,168 × 4,096 matrix projection (LLM hidden dim 7,168)</span>
+                    <span>• Normalization: Output RMSNorm(7,168)</span>
+                    <span>• Output: [{(((projRes / 14) ** 2) / 4).toLocaleString()}, 7,168]</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedProjStage === 5 && (
+                <div>
+                  <h4 style={{ color: '#F59E0B', margin: '0 0 8px 0', fontSize: '1.05rem' }}>🔄 Stage 5: Interleaving &amp; 163,840-Vocabulary Autoregressive Decoding</h4>
+                  <p style={{ color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                    The projected visual tokens are seamlessly concatenated with text tokens (prefix and suffix prompt embeddings) into a unified sequence Stream X.
+                    The combined sequence flows through K3’s 93-layer backbone (MLA / MoE / KDA / AttnRes). At each generation step, the final hidden state <code>h_t ∈ ℝ^7,168</code> is multiplied by the unembedding matrix <code>W_unembed ∈ ℝ^(163,840×7,168)</code> to yield 163,840 logits, from which the next text token is sampled.
+                  </p>
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: '0.85rem', color: '#F59E0B' }}>
+                    <span>• Vocabulary Size: 163,840 tokens</span>
+                    <span>• Unembedding Matrix: [163,840 × 7,168]</span>
+                    <span>• Autoregressive Loop: Sample token ➔ Append to context ↺ Repeat</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PyTorch-style implementation snippet */}
+            <div style={{ background: '#0B0F19', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', fontFamily: 'monospace', fontSize: '0.82rem', color: '#E2E8F0', overflowX: 'auto' }}>
+              <div style={{ color: '#64748B', marginBottom: '6px' }}># Official Kimi-K3 forward vision encoding &amp; projection pipeline (reference implementation):</div>
+              <div style={{ color: '#38BDF8' }}>patches = patchify(image, patch_size=14)                     # [B, N_patch={((projRes / 14) ** 2).toLocaleString()}, 588]</div>
+              <div style={{ color: '#A78BFA' }}>f_vit = self.moonvit_v2(patches)                             # [B, N_patch={((projRes / 14) ** 2).toLocaleString()}, 1024] (27 layers, 12 heads, head_dim 128)</div>
+              <div style={{ color: '#10B981' }}>v_down = pixel_shuffle_downsample(f_vit, scale=2)            # [B, N_visual={(((projRes / 14) ** 2) / 4).toLocaleString()}, 4096] (4x compression)</div>
+              <div style={{ color: '#EC4899' }}>x_img = self.projector_norm(self.projector(v_down))         # [B, N_visual={(((projRes / 14) ** 2) / 4).toLocaleString()}, 7168] (MLP + RMSNorm)</div>
+              <div style={{ color: '#F59E0B' }}>seq_stream = torch.cat([x_prefix, x_img, x_suffix], dim=1)  # [B, T_total, 7168]</div>
+              <div style={{ color: '#94A3B8', marginTop: '4px' }}># ➔ 93-layer backbone ➔ w_unembed(h_t) [B, 163,840] ➔ next token generation</div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 interface TokenInputAnimationProps {
   mode?: 'multimodal' | 'layer';
   layerId?: number;
-  onNavigateTab?: (tab: any) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const TokenInputAnimation: React.FC<TokenInputAnimationProps> = ({ mode = 'multimodal', layerId = 1, onNavigateTab }) => {

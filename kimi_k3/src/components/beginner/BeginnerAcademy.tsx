@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './beginner.css';
 
 export interface BeginnerScene {
@@ -141,9 +141,9 @@ export const BeginnerAcademy: React.FC<{ lessons: BeginnerLesson[] }> = ({ lesso
   const scene = lesson.scenes[sceneIdx];
   const isLast = sceneIdx === lesson.scenes.length - 1;
 
-  const goTo = (idx: number) => {
+  const goTo = useCallback((idx: number) => {
     setSceneIdx(Math.max(0, Math.min(lesson.scenes.length - 1, idx)));
-  };
+  }, [lesson.scenes.length]);
 
   const selectLesson = (id: string) => {
     setActiveId(id);
@@ -166,14 +166,13 @@ export const BeginnerAcademy: React.FC<{ lessons: BeginnerLesson[] }> = ({ lesso
     };
   }, [playing, sceneIdx, lesson.id, lesson.scenes.length, scene?.duration]);
 
-  const togglePlay = () => {
-    if (playing) {
-      setPlaying(false);
-    } else {
+  const togglePlay = useCallback(() => {
+    setPlaying((p) => {
+      if (p) return false;
       if (isLast) goTo(0);
-      setPlaying(true);
-    }
-  };
+      return true;
+    });
+  }, [isLast, goTo]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -194,7 +193,7 @@ export const BeginnerAcademy: React.FC<{ lessons: BeginnerLesson[] }> = ({ lesso
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [sceneIdx, lesson.scenes.length, playing, isLast]);
+  }, [sceneIdx, goTo, togglePlay]);
 
   return (
     <div className="bgn-root">

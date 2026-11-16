@@ -25,8 +25,8 @@ export const AttentionOperatorAnimation: React.FC<{ type: 'KDA' | 'MLA' }> = ({ 
     },
     {
       title: 'State Update (Channel Forget Gate Delta Rule)',
-      formula: 'S_t^h = (I - β_t^h * k_t^h * (k_t^h)ᵀ * Diag(α_t^h)) * S_(t-1)^h + β_t^h * k_t^h * (v_t^h)ᵀ',
-      desc: 'Core recurrence relation: S_t is a d_k x d_v recurrent memory state matrix.',
+      formula: 'S_t^h = (I - β_t^h * k_t^h * (k_t^h)ᵀ) * Diag(α_t^h) * S_(t-1)^h + β_t^h * k_t^h * (v_t^h)ᵀ',
+      desc: 'First applies channel-wise decay S̄_t = Diag(α_t) S_(t-1), predicts value v̂_t = S̄_tᵀ k_t, and adds error correction ΔS = β_t k_t (v_t - v̂_t)ᵀ.',
       op: 'Recurrent Memory Core Matrix Update'
     },
     {

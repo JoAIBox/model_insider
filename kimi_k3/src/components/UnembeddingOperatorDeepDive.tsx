@@ -126,7 +126,7 @@ export const UnembeddingOperatorDeepDive: React.FC = () => {
                 <div>// 1. Final RMSNorm</div>
               <div style={{ color: '#38BDF8' }}>h_final = RMSNorm( h_(T,93) ) (width: 7,168)</div>
                 <div>// 2. Vocabulary projection produces the logits vector</div>
-              <div style={{ color: '#A78BFA' }}>z = W_unembed · h_final (vocabulary size V = 160,000)</div>
+              <div style={{ color: '#A78BFA' }}>z = W_unembed · h_final (vocabulary size V = 163,840 [160K])</div>
                 <div>// 3. Temperature scaling and Softmax probability distribution</div>
               <div style={{ color: '#10B981' }}>P(w_i) = exp( z_i / T ) / Σ_j exp( z_j / T )</div>
             </div>
@@ -158,7 +158,7 @@ export const UnembeddingOperatorDeepDive: React.FC = () => {
               {/* W_unembed Projection */}
               <rect x="440" y="90" width="180" height="80" rx="8" fill="rgba(245, 158, 11, 0.15)" stroke="#F59E0B" strokeWidth="2" />
               <text x="530" y="125" fill="#F59E0B" fontSize="15" fontWeight="bold" textAnchor="middle">W_unembed matrix</text>
-              <text x="530" y="148" fill="#FFF" fontSize="13" fontFamily="monospace" textAnchor="middle">160,000 × 7,168</text>
+              <text x="530" y="148" fill="#FFF" fontSize="13" fontFamily="monospace" textAnchor="middle">163,840 × 7,168</text>
 
               <line x1="620" y1="130" x2="680" y2="130" stroke="#10B981" strokeWidth="2" markerEnd="url(#arrow-unembed)" />
 
@@ -293,7 +293,7 @@ export const UnembeddingOperatorDeepDive: React.FC = () => {
                 </div>
               ))}
               <small style={{ display: 'block', color: '#94A3B8', marginTop: '10px', lineHeight: '1.45' }}>
-                Teaching slice: 5 displayed candidates from a 160K-token vocabulary. The full model applies the same rule over the complete vocabulary distribution.
+                Teaching slice: 5 displayed candidates from the official 163,840-token vocabulary (160K display). The full model applies the same rule over the complete vocabulary distribution.
               </small>
             </div>
           </div>

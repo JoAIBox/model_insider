@@ -17,7 +17,7 @@ interface LayerItem {
 }
 
 interface DashboardProps {
-  onNavigateTab?: (tab: any) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
@@ -132,26 +132,31 @@ This hidden state vector is forwarded directly from the previous layer or via th
           title: `${selectedLayer?.type ?? 'Hybrid'} attention`,
           text: selectedLayer?.type === 'KDA'
             ? `[Kimi Delta Attention (KDA) Operators & Computation]:
-KDA performs sequential mixing along the time dimension using a Delta rule with channel-wise decay:
+KDA performs sequential mixing along the time dimension using a Delta rule with channel-wise lower-bounded decay:
 1. Input Normalization: x'_t = RMSNorm(x_t)
 2. Linear Projection & Local Smoothing:
    q_t^h, k_t^h = L2Norm(Swish(ShortConv(W_q/k · x'_t))) ∈ ℝ^(d_k)
    v_t^h = Swish(ShortConv(W_v · x'_t)) ∈ ℝ^(d_v)
 3. Decay Factor & Write Strength:
    Write gate: β_t^h = Sigmoid(W_β · x'_t) ∈ (0, 1)
-   Forget gate log-space projection: z_t^h = W_α↑ · W_α↓ · x'_t + b_α^h ∈ ℝ^(d_k)
-   Forget decay rate: α_t^h = Diag(1 - Sigmoid(z_t^h))
-4. Recurrent State Update:
-   S_t^h = (I - β_t^h · k_t^h · (k_t^h)ᵀ · α_t^h) · S_(t-1)^h + β_t^h · k_t^h · (v_t^h)ᵀ  (Matrix size: d_k × d_v)
+   Decay logit: z_t^h = W_α↑ · W_α↓ · x'_t + b_α^h ∈ ℝ^(d_k)
+   Lower-bounded log-decay: g_t^h = -5 · Sigmoid(e^(A_h) · z_t^h) ∈ (-5, 0)
+   Retention rate: α_t^h = exp(g_t^h) ∈ (e^(-5), 1)
+4. Recurrent State Update (Channel-wise decay before Delta rule):
+   Decayed prior state: S̄_t^h = Diag(α_t^h) · S_(t-1)^h
+   Predicted value: v̂_t^h = (S̄_t^h)ᵀ · k_t^h
+   Error residual: δ_t^h = v_t^h - v̂_t^h
+   Updated state: S_t^h = S̄_t^h + β_t^h · k_t^h · (δ_t^h)ᵀ
+   (Equivalently: S_t^h = (I - β_t^h · k_t^h · (k_t^h)ᵀ) · Diag(α_t^h) · S_(t-1)^h + β_t^h · k_t^h · (v_t^h)ᵀ)
 5. Recurrent Output & Gated Projection:
    Raw output: õ_t^h = (S_t^h)ᵀ · q_t^h
    Concatenated head output: õ_t = Concat(õ_t^1, ..., õ_t^H) with Head-wise RMSNorm applied
-   Output gating: y_t = W_o · [Sigmoid(W_g · x'_t) ⊙ RMSNorm(õ_t)]`
+   Full-rank output gating: y_t = W_o · [Sigmoid(W_g · x_t) ⊙ RMSNorm(õ_t)]`
             : `[Gated MLA Operators & Computation]:
 MLA reduces the KV Cache memory footprint via low-rank compression, introducing a data-dependent output gating:
 1. Input Normalization: x'_t = RMSNorm(x_t)
 2. Low-rank Compression:
-   c_t = W_c · x'_t ∈ ℝ^(d_c)  (Compresses current state to low-rank representation for KV-Cache)
+   c_t = W_c · x'_t ∈ ℝ^(d_c)  (d_c = 512, compresses current state to low-rank representation for KV-Cache)
 3. Key-Value Reconstruction (Up-projections):
    Key recovery: K_t_content = W_uk · c_t
    Value recovery: V_t = W_uv · c_t
@@ -159,45 +164,44 @@ MLA reduces the KV Cache memory footprint via low-rank compression, introducing 
    Query vector: Q_t = W_q · x'_t
    Attention weighting: õ_t = Softmax( Q_t · (K_t_content)ᵀ / √d_h ) · V_t
 5. Full-rank Gated Output:
-   y_t = W_o · [Sigmoid(W_g · x_t) ⊙ õ_t]  (Gating matrix W_g filters channels dynamically)`,
+   y_t = W_o · [Sigmoid(W_g · x_t) ⊙ õ_t]  (Full-rank gating matrix W_g filters channels dynamically)`,
         },
         path: {
           title: selectedLayer?.hasMoe ? 'MoE expert routing' : 'Dense feed-forward path',
           text: selectedLayer?.hasMoe
             ? `[Stable LatentMoE Operators & Computation]:
 Mixes features along the channel dimension. Each token is distributed to 2 shared experts and 16 sparse experts routed dynamically from a pool of 896:
-1. Shared Experts Forward: y_shared = E_1_shared(x_t) + E_2_shared(x_t) (Operates on the full width d=7,168)
+1. Shared Experts Forward: y_shared = E_1_shared(x_t) + E_2_shared(x_t) (Operates directly on the full width d=7,168)
 2. Latent Space Down-projection: z_t = W_↓ · x_t ∈ ℝ^l (Reduces features from d=7,168 to communication space l=3,584)
 3. Quantile Balancing Router (QB Routing):
    s_t = Sigmoid(W_r · x_t); dispatch uses Top-16(s_t + b_t)
-   Mixture weights use the selected raw scores only: p_i = s_i / Σ_(j∈T_16) s_j
-4. Expert Forward with SiTU-GLU Activation:
-   E_i(z_t) = W_up · ( β_1 · tanh(z'_t / β_1) ⊙ Sigmoid(z'_t) ) · W_gate, where z'_t = RMSNorm(W_in · z_t)
-   (SiTU-GLU bounds activation scales within |f(x)| ≤ β_1*β_2=100 to prevent activation explosions at 2.8T parameters)
-5. Aggregation: u_t = ∑_(i ∈ T_16) p_i · E_i(z_t)
+   Mixture weights normalize selected raw scores only (bias b_t not used in weights): p_i = s_i / Σ_(j∈T_16) s_j
+4. Expert Forward with SiTU-GLU Activation (both branches capped):
+   SiTU-GLU(z'_t) = [ β_1 · tanh(W_g · z'_t / β_1) ⊙ Sigmoid(W_g · z'_t) ] ⊙ [ β_2 · tanh(W_u · z'_t / β_2) ]
+   (With β_1=4, β_2=25, the activation scale is strictly bounded by |f(x)| ≤ 100 to prevent activation explosions)
+5. Aggregation: u_t = ∑_(i ∈ T_16) p_i · E_i(z_t) ∈ ℝ^3584
 6. Merging & Up-projection:
-   y_t = y_shared + W_↑ · RMSNorm(u_t) (RMSNorm before W_↑ reduces sensitivity to routing weight scales, improving stability)`
+   y_t = y_shared + W_↑ · RMSNorm(u_t) (RMSNorm before W_↑ stabilizes scale variation across expert combinations)`
             : `[Dense Feed-forward Path (Layer 1) Operators & Computation]:
-Layer 1 is a dense layer with no sparse MoE routing, using a classic SwiGLU feed-forward network:
+Layer 1 is a dense layer with no sparse MoE routing, using a SwiGLU feed-forward network with published intermediate dimension 33,792:
 1. Input Normalization: x'_t = RMSNorm(x_t)
-2. Dual-branch Projection: y_gate = W_gate · x'_t, y_up = W_up · x'_t
+2. Dual-branch Projection: y_gate = W_gate · x'_t, y_up = W_up · x'_t  (dimension d_ffn = 33,792)
 3. Gated Activation: y_act = Swish(y_gate) ⊙ y_up
 4. Down-projection: y_t = W_down · y_act`,
         },
         residual: {
-          title: 'Residual + Attention Residuals (AttnRes)',
-          text: `[Residual & AttnRes Operators & Computation]:
-Directly reads representations from historical block boundaries using an attention mechanism to prevent signal dilution in deep networks:
+          title: 'Attention Residuals (AttnRes) module input',
+          text: `[AttnRes Cross-Layer Retrieval Operators & Computation]:
+Directly retrieves representations from historical block boundaries using a learned pseudo-query:
 1. Block Summation:
-   b_n = ∑_(j ∈ B_n) f_j(h_j) (Summation of outputs within block n of length 12; b_0 = h_1 is the input embedding)
-2. Query Projection: q_l = W_l · h_l ∈ ℝ^d
-3. Normalization & Attention Scoring:
-   Retrieval score: α_(i→l) = Softmax( q_lᵀ · RMSNorm(b_i) / √d )
+   b_n = ∑_(j ∈ B_n) f_j(h_j) (Sum of outputs within block n of length 12; b_0 = h_1 is the input token embedding)
+2. Learned Pseudo-Query:
+   Each layer has a fixed learned parameter vector w_l ∈ ℝ^d (not an input projection)
+3. Normalization & Softmax Scoring:
+   Retrieval weight: α_(i→l) = exp( w_lᵀ · RMSNorm(k_i) ) / ∑_(j=0)^(sources-1) exp( w_lᵀ · RMSNorm(k_j) )
 4. Weighted Aggregation:
-   h_l_read = ∑_(i=0)^(n-1) α_(i→l) · b_i (+ α_(cur→l) · b_n^(local-1) if within the current block)
-5. Separate residual wrapper (if present):
-   r_l = h_l_read
-   x_(l+1) = x_l + F_l(r_l) (Keeps AttnRes aggregation separate from the outer residual path)`,
+   h_l_read = ∑_(i) α_(i→l) · v_i (where k_i = v_i are block summaries and partial sums; un-normalized values are summed)
+   This directly forms the input representation for layer l's attention/FFN modules.`,
         },
       }[selectedMicroNode];
 
@@ -915,7 +919,7 @@ x_t_vis = W_proj * PixelShuffle(v_t_feat)`}
                             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', color: '#E2E8F0', paddingBottom: '4px' }}>Variable</div>
                             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', color: '#E2E8F0', paddingBottom: '4px' }}>Physical Meaning</div>
                             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', color: '#E2E8F0', paddingBottom: '4px' }}>Dimension</div>
-                            <div>W_proj</div><div>Projection weight matrix for vision alignment</div><div style={{ fontFamily: 'monospace' }}>[7,168 * 2,048]</div>
+                            <div>W_proj</div><div>Projection weight matrix for vision alignment</div><div style={{ fontFamily: 'monospace' }}>[7,168 × 4,096]</div>
                             <div>x_t_vis</div><div>Continuous visual feature vector mapped to LLM dimension</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                           </div>
                         </div>
@@ -978,17 +982,23 @@ X = [X_prefix, X_vision, X_suffix]`}
                           {selectedLayer.type === 'KDA' ? (
                             <MathRenderer 
                               color="#00F2FE"
-                              formula={`// Q, K, V with convolution and L2Norm normalization
-   q_t, k_t = L2Norm(Swish(ShortConv(W_q/k * x'_t)))
-// Delta recurrent update with channel-wise decay and write strength (S_t size: d_k x d_v)
-S_t = (I - β_t * k_t * k_tᵀ) * Diag(α_t) * S_t-1 + β_t * k_t * v_tᵀ
+                              formula={`// Q, K, V projections with ShortConv and Swish; Q and K with L2Norm
+q_t, k_t = L2Norm(Swish(ShortConv(W_q/k * x'_t))), v_t = Swish(ShortConv(W_v * x'_t))
+// Channel-wise lower-bounded decay (g_min = -5)
+g_t = -5 * Sigmoid(exp(A_h) * z_t),  alpha_t = exp(g_t) ∈ (exp(-5), 1)
+// Channel-wise decay followed by Delta-rule error correction
+S_bar = Diag(alpha_t) * S_t-1
+v_hat = S_barᵀ * k_t
+delta_t = v_t - v_hat
+S_t = S_bar + beta_t * k_t * delta_tᵀ
+// Equivalent form: S_t = (I - beta_t * k_t * k_tᵀ) * Diag(alpha_t) * S_t-1 + beta_t * k_t * v_tᵀ
 // Gated fusion and final projection
 y_t = W_o * (Sigmoid(W_g * x_t) ⊙ RMSNorm(S_tᵀ * q_t))`}
                             />
                           ) : (
                             <MathRenderer 
                               color="#C084FC"
-                              formula={`// Low-rank latent compression (d_c dimensional KV Cache)
+                              formula={`// Low-rank latent compression (d_c = 512 dimensional KV Cache)
 c_t = W_c * x'_t
 // Key-value reconstruction and global attention calculation (NoPE with no absolute position encoding)
 K_t = W_uk * c_t, V_t = W_uv * c_t, Q_t = W_q * x'_t
@@ -1008,18 +1018,18 @@ y_t = W_o * (Sigmoid(W_g * x_t) ⊙ õ_t)`}
                             {selectedLayer.type === 'KDA' ? (
                               <>
                                 <div>x_t / x'_t</div><div>Input token raw feature / RMSNorm normalized feature</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                                <div>q_t / k_t</div><div>Head-wise retrieval query / key vector (with L2Norm)</div><div style={{ fontFamily: 'monospace' }}>[H = 96; d_k not disclosed]</div>
-                                <div>v_t</div><div>Head-wise write value vector</div><div style={{ fontFamily: 'monospace' }}>[H = 96; d_v not disclosed]</div>
-                                <div>S_t / S_t-1</div><div>Recurrent accumulated memory state matrix</div><div style={{ fontFamily: 'monospace' }}>[96 head states; d_k × d_v not disclosed]</div>
-                                <div>α_t / β_t</div><div>Channel-wise retention factor / write strength</div><div style={{ fontFamily: 'monospace' }}>[H = 96; channel width not disclosed]</div>
+                                <div>q_t / k_t</div><div>Head-wise retrieval query / key vector (with L2Norm)</div><div style={{ fontFamily: 'monospace' }}>[H = 96; d_k = 128]</div>
+                                <div>v_t</div><div>Head-wise write value vector</div><div style={{ fontFamily: 'monospace' }}>[H = 96; d_v = 128]</div>
+                                <div>S_t / S_t-1</div><div>Recurrent accumulated memory state matrix</div><div style={{ fontFamily: 'monospace' }}>[96 heads; 128 × 128]</div>
+                                <div>α_t / β_t</div><div>Channel-wise retention factor / write strength</div><div style={{ fontFamily: 'monospace' }}>[H = 96; channel width 128]</div>
                                 <div>y_t</div><div>KDA attention sub-layer final gated projection output</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                               </>
                             ) : (
                               <>
                                 <div>x_t / x'_t</div><div>Input token raw feature / RMSNorm normalized feature</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                                <div>c_t</div><div>Low-rank latent compression intermediate representation (KV Cache node)</div><div style={{ fontFamily: 'monospace' }}>[d_c not disclosed]</div>
-                                <div>Q_t</div><div>Query feature for NoPE global attention</div><div style={{ fontFamily: 'monospace' }}>[H = 96; head width not disclosed]</div>
-                                <div>K_t / V_t</div><div>Reconstructed content key / value feature</div><div style={{ fontFamily: 'monospace' }}>[H = 96; head width not disclosed]</div>
+                                <div>c_t</div><div>Low-rank latent compression intermediate representation (KV Cache node)</div><div style={{ fontFamily: 'monospace' }}>[d_c = 512]</div>
+                                <div>Q_t</div><div>Query feature for NoPE global attention</div><div style={{ fontFamily: 'monospace' }}>[H = 96; head width d_h = 128]</div>
+                                <div>K_t / V_t</div><div>Reconstructed content key / value feature</div><div style={{ fontFamily: 'monospace' }}>[H = 96; head width d_h = 128]</div>
                                 <div>õ_t</div><div>Global NoPE multi-head attention Softmax output</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                                 <div>y_t</div><div>Full-rank gating Sigmoid(W_g) combined with output projection W_o</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                               </>
@@ -1049,19 +1059,20 @@ y_t = W_o * (Sigmoid(W_g * x_t) ⊙ õ_t)`}
                           {selectedLayer.hasMoe ? (
                             <MathRenderer 
                               color="#10B981"
-                              formula={`// Shared path and latent routed path
+                              formula={`// Shared path (full width d=7168) and latent routed path (l=3584)
 y_shared = E_1_shared(x_t) + E_2_shared(x_t)
 z_t = W_↓ * x_t   (z_t ∈ R^3584)
 s_t = Sigmoid(W_r * x_t); T_16 = Top16(s_t + b_t)
-p_i = s_i / Σ_{j∈T_16} s_j   (QB bias is not used in p_i)
-u_t = ∑_{i ∈ T_16} p_i * E_i(z_t)
-// Routed result returns to backbone width after normalization
+p_i = s_i / Σ_{j∈T_16} s_j   (QB bias b_t determines dispatch, omitted from mixture weights p_i)
+// Experts use SiTU-GLU bounded activation: |f(x)| ≤ β1*β2 = 100
+u_t = ∑_{i ∈ T_16} p_i * E_i(z_t)   (u_t ∈ R^3584)
+// Routed result normalized then up-projected back to backbone width
 y_t = y_shared + W_↑ * RMSNorm(u_t)`}
                             />
                           ) : (
                             <MathRenderer 
                               color="#94A3B8"
-                              formula={`// Classic SwiGLU FFN calculation (dense Layer 1 only)
+                              formula={`// SwiGLU dense FFN calculation (dense Layer 1, d_ffn = 33,792)
 y_gate = W_gate * x'_t, y_up = W_up * x'_t
 y_act = Swish(y_gate) ⊙ y_up
 y_t = W_down * y_act`}
@@ -1079,16 +1090,16 @@ y_t = W_down * y_act`}
                               <>
                                 <div>x_t</div><div>Residual input entering feed-forward sub-layer</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                                 <div>z_t</div><div>Down-projected communication channel hidden vector (reduced space)</div><div style={{ fontFamily: 'monospace' }}>[l = 3,584]</div>
-                                <div>p_i</div><div>Softmax routing probability assigned to the i-th expert</div><div style={{ fontFamily: 'monospace' }}>Scalar [0, 1]</div>
-                                <div>E_i(z)</div><div>Forward output of the i-th active expert</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
+                                <div>p_i</div><div>Normalized routing weight assigned to the i-th expert</div><div style={{ fontFamily: 'monospace' }}>Scalar [0, 1]</div>
+                                <div>E_i(z)</div><div>Forward output of the i-th active expert (hidden width 3,072)</div><div style={{ fontFamily: 'monospace' }}>[l = 3,584]</div>
                                 <div>u_t</div><div>Weighted normalized aggregation of 16 routed experts</div><div style={{ fontFamily: 'monospace' }}>[l = 3,584]</div>
                               </>
                             ) : (
                               <>
                                 <div>x_t / x'_t</div><div>Input token raw feature / RMSNorm normalized feature</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                                <div>y_gate / y_up</div><div>Dual-branch gate / up projection in GLU</div><div style={{ fontFamily: 'monospace' }}>[d_ffn = 19,456]</div>
-                                <div>y_act</div><div>Gated activation value (element-wise product of Swish and linear projection)</div><div style={{ fontFamily: 'monospace' }}>[d_ffn = 19,456]</div>
-                                <div>y_t</div><div>Classic SwiGLU output feature mapped via W_down</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
+                                <div>y_gate / y_up</div><div>Dual-branch gate / up projection in GLU</div><div style={{ fontFamily: 'monospace' }}>[d_ffn = 33,792]</div>
+                                <div>y_act</div><div>Gated activation value (element-wise product of Swish and linear projection)</div><div style={{ fontFamily: 'monospace' }}>[d_ffn = 33,792]</div>
+                                <div>y_t</div><div>Dense FFN output feature mapped via W_down</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                               </>
                             )}
                           </div>
@@ -1103,7 +1114,7 @@ y_t = W_down * y_act`}
                         <div>
                           <span style={{ fontSize: '1.15rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
                           <p style={{ fontSize: '1.15rem', color: '#E2E8F0', marginTop: '2px', lineHeight: '1.4' }}>
-                            Parallel execution of 2 full-dimension FFN shared experts → RMSNorm normalization on sparse routing aggregation → combine with up-projection (W_↑) → vector sum and accumulation
+                            Parallel execution of 2 full-dimension FFN shared experts directly on x_t → combine with up-projected routed aggregation W_↑ RMSNorm(u_t)
                           </p>
                         </div>
                         <div>
@@ -1134,13 +1145,13 @@ y_ffn = y_shared + W_↑ * RMSNorm(u_t)`}
                       {/* Step 4: Block AttnRes aggregation */}
                       <div style={{ border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '6px', padding: '12px', background: 'rgba(16, 185, 129, 0.02)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.02rem', fontWeight: 'bold', color: '#FFF', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', paddingBottom: '6px' }}>
-                          <span>4. Block AttnRes aggregation</span>
-                          <span style={{ color: '#10B981' }}>one weighted source set</span>
+                          <span>4. Block AttnRes cross-layer retrieval</span>
+                          <span style={{ color: '#10B981' }}>learned pseudo-query w_l</span>
                         </div>
                         <div>
                           <span style={{ fontSize: '1.15rem', color: '#94A3B8', fontWeight: 'bold' }}>[ Included Operators ]</span>
                           <p style={{ fontSize: '1.15rem', color: '#E2E8F0', marginTop: '2px', lineHeight: '1.4' }}>
-                            Retrieval query linear projection (W_l) → RMSNorm normalization on block representations → dot-product Softmax weights → one aggregation of b₀, earlier block summaries, and the current partial sum. Any outer residual wrapper is a separate operation.
+                            Learned layer pseudo-query w_l · RMSNorm on block representations → dot-product Softmax weights → single aggregation of token embedding b₀, earlier block summaries, and current partial sum.
                           </p>
                         </div>
                         <div>
@@ -1148,12 +1159,13 @@ y_ffn = y_shared + W_↑ * RMSNorm(u_t)`}
                           <MathRenderer 
                             color="#10B981"
                             formula={`// 12-layer block architecture: layer l in Block n with local index i (1-indexed)
-V = [b_0, b_1, ..., b_n-1]ᵀ           (if i = 1)
-V = [b_0, b_1, ..., b_n-1, b_n^(i-1)]ᵀ (if i ≥ 2)
-// Retrieval weight calculation and accumulation (K, V generated from Block representations)
-α_k = Softmax(q_lᵀ * RMSNorm(k_b) / √d)
-                            r_l = ∑ α_k * v_k  // AttnRes aggregation
-x_(l+1) = x_l + F_l(r_l)  // separate outer residual wrapper`}
+// Source value representations:
+V = [b_0, b_1, ..., b_{n-1}]ᵀ           (if i = 1)
+V = [b_0, b_1, ..., b_{n-1}, b_n^{(i-1)}]ᵀ (if i ≥ 2)
+// Retrieval weight calculation using learned pseudo-query w_l ∈ R^d
+α_k = exp(w_lᵀ * RMSNorm(b_k)) / Σ_j exp(w_lᵀ * RMSNorm(b_j))
+// Retrieved representation directly inputs to layer l modules
+h_l = ∑ α_k * b_k`}
                           />
                         </div>
                         <div>
@@ -1163,11 +1175,10 @@ x_(l+1) = x_l + F_l(r_l)  // separate outer residual wrapper`}
                             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', color: '#E2E8F0', paddingBottom: '3px' }}>Physical Meaning</div>
                             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', color: '#E2E8F0', paddingBottom: '3px' }}>Dimension</div>
                             
-                            <div>h_l</div><div>Main backbone residual input feature entering layer l</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
+                            <div>w_l</div><div>Learned pseudo-query parameter for layer l</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                             <div>b_k</div><div>Boundary node feature of the k-th completed Block (b_0 is input embedding)</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                            <div>q_l</div><div>AttnRes retrieval query vector generated by current layer</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
-                            <div>α_k</div><div>Retrieval score for the k-th Block representation (Softmax weight)</div><div style={{ fontFamily: 'monospace' }}>Scalar [0, 1]</div>
-                            <div>r_l</div><div>Block AttnRes output after the weighted source aggregation</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
+                            <div>α_k</div><div>Retrieval attention weight for the k-th Block representation (Softmax probability)</div><div style={{ fontFamily: 'monospace' }}>Scalar [0, 1]</div>
+                            <div>h_l</div><div>AttnRes output formed by the weighted source aggregation</div><div style={{ fontFamily: 'monospace' }}>[d = 7,168]</div>
                           </div>
                         </div>
                       </div>

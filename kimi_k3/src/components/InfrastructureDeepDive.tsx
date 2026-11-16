@@ -1,64 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { calculateMemoryEstimates } from '../utils/toyMath';
 
 export const InfrastructureDeepDive: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'kdaMoe' | 'memory' | 'serving'>('kdaMoe');
   
   // Fleet load balancer states
   const [ep3Enabled, setEp3Enabled] = useState<boolean>(false);
-  const [gpuLoads, setGpuLoads] = useState<number[]>([92, 15, 88, 20, 95, 18, 90, 22]);
 
   // KDA dual-pool cache state
   const [contextSlider, setContextSlider] = useState<number>(128); // K tokens
+
+  // Full-model cache calculation across 93 layers (69 KDA + 24 MLA)
+  const memEst = useMemo(() => {
+    return calculateMemoryEstimates(1, contextSlider * 1024);
+  }, [contextSlider]);
 
   // ViT bubble packing state
   const [vitPacked, setVitPacked] = useState<boolean>(true);
 
   // VM state machine variables
   const [vmState, setVmState] = useState<'idle' | 'running' | 'paused' | 'checkpointing'>('idle');
-  const [logMessages, setLogMessages] = useState<string[]>(["[AgentEnv] System initialized."]);
+  const [logMessages, setLogMessages] = useState<string[]>([
+    "[AgentEnv] System initialized. MicroVM snapshot pool ready."
+  ]);
   const [showFormula, setShowFormula] = useState<boolean>(false);
 
-  // Simulate real-time fluctuating GPU load
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setGpuLoads(() => {
-        if (!ep3Enabled) {
-          // Unbalanced state: some hot, some cold
-          return [
-            90 + Math.floor(Math.random() * 8),
-            12 + Math.floor(Math.random() * 8),
-            85 + Math.floor(Math.random() * 8),
-            18 + Math.floor(Math.random() * 8),
-            94 + Math.floor(Math.random() * 6),
-            15 + Math.floor(Math.random() * 8),
-            88 + Math.floor(Math.random() * 8),
-            20 + Math.floor(Math.random() * 8)
-          ];
-        } else {
-          // Perfectly balanced state: all uniform
-          return Array.from({ length: 8 }, () => 65 + Math.floor(Math.random() * 8));
-        }
-      });
-    }, 1000);
-    return () => clearInterval(timer);
+  // Deterministic educational profiles for GPU rank utilization
+  // Unbalanced: Hot ranks 0, 2, 4, 6 overloaded by token clustering; Cold ranks 1, 3, 5, 7 starved.
+  // Balanced (MoonEP3): Hierarchical redistribution equalizes token counts across all 8 ranks.
+  const gpuLoads = useMemo(() => {
+    const UNBALANCED = [92, 16, 88, 20, 95, 18, 90, 22];
+    const BALANCED = [68, 67, 69, 68, 68, 67, 69, 68];
+    return ep3Enabled ? BALANCED : UNBALANCED;
   }, [ep3Enabled]);
 
   const triggerVMAction = (action: 'run' | 'pause' | 'checkpoint' | 'resume') => {
     if (action === 'run') {
       setVmState('running');
-      setLogMessages(prev => [...prev, "[AgentEnv] Starting Firecracker microVM...", "[AgentEnv] VM booted in 49ms.", "[AgentEnv] Executing agent tool calls..."]);
+      setLogMessages(prev => [
+        ...prev,
+        "[Simulation Mockup] Starting Firecracker microVM from snapshot...",
+        "[Simulation Mockup] Restoring memory state (reference benchmark ~49ms)...",
+        "[Simulation Mockup] Agent tool container running in isolated guest OS."
+      ]);
     } else if (action === 'pause') {
       setVmState('paused');
-      setLogMessages(prev => [...prev, "[AgentEnv] VM paused. RAM frozen. Host CPU usage set to 0.00%."]);
+      setLogMessages(prev => [
+        ...prev,
+        "[Simulation Mockup] VM paused. RAM state frozen in memory. Host CPU utilization dropped to 0.0%."
+      ]);
     } else if (action === 'checkpoint') {
       setVmState('checkpointing');
-      setLogMessages(prev => [...prev, "[AgentEnv] Saving dirtied memory pages...", "[AgentEnv] Incremental checkpoint written in 133ms."]);
+      setLogMessages(prev => [
+        ...prev,
+        "[Simulation Mockup] Tracking dirty memory pages...",
+        "[Simulation Mockup] Writing incremental snapshot to NVMe (reference benchmark ~133ms)..."
+      ]);
       setTimeout(() => {
         setVmState('idle');
       }, 1000);
     } else if (action === 'resume') {
       setVmState('running');
-      setLogMessages(prev => [...prev, "[AgentEnv] Resuming from snapshot...", "[AgentEnv] VM restored in 49ms."]);
+      setLogMessages(prev => [
+        ...prev,
+        "[Simulation Mockup] Resuming microVM execution from snapshot (reference benchmark ~49ms)...",
+        "[Simulation Mockup] Agent resuming step execution."
+      ]);
     }
   };
 
@@ -99,7 +106,12 @@ export const InfrastructureDeepDive: React.FC = () => {
           
           {activeSubTab === 'kdaMoe' && (
             <div>
-              <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', marginBottom: '15px' }}>🔗 Fleet GPU Cluster MoE Load Distribution (Item 26)</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                <h3 style={{ color: '#FFFFFF', fontSize: '1.05rem', margin: 0 }}>🔗 Fleet GPU Cluster MoE Load Distribution (Item 26)</h3>
+                <span style={{ fontSize: '0.72rem', background: 'rgba(56, 189, 248, 0.12)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '2px 8px', borderRadius: '4px' }}>
+                  Educational Simulation (Demonstrates rank redistribution; not live data center telemetry)
+                </span>
+              </div>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <span style={{ fontSize: '1.02rem', color: '#94A3B8' }}>Cluster Expert Routing Strategy:</span>
@@ -193,15 +205,15 @@ export const InfrastructureDeepDive: React.FC = () => {
               {/* Cache size visual comparison bars (RAM Stick SVGs) */}
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', background: '#02040a', padding: '20px 15px', borderRadius: '8px' }}>
                 <small style={{ flexBasis: '100%', display: 'block', color: '#64748B', lineHeight: '1.45' }}>
-                  Comparison scope: separate illustrative serving-memory scales. Batch size, layer coverage, head width, dtype, and implementation details are abstracted into the teaching coefficients; these absolute GB values are not a reported full-model measurement and are not directly comparable with the KDA operator panel.
+                  Unified Cache Comparison: Evaluated across all 93 layers (69 KDA + 24 MLA) using official dimensions (Batch Size = 1, FP16 precision). Standard MHA baseline models all 93 layers with 96 heads (d_h = 128).
                 </small>
                 
                 {/* Standard KV Cache RAM Stick */}
                 <div style={{ flex: '1', minWidth: '240px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#94A3B8', marginBottom: '8px' }}>
-                    <span>Full-attention KV-growth toy estimate (O(N))</span>
-                    <span style={{ color: contextSlider >= 800 ? '#EF4444' : '#FFB000', fontWeight: 'bold' }}>
-                      {(contextSlider * 0.08).toFixed(1)} GB {contextSlider >= 800 && '⚠️ OOM!'}
+                    <span>Standard 93L MHA KV (O(N))</span>
+                    <span style={{ color: memEst.standardMhaKvGiB >= 150 ? '#EF4444' : '#FFB000', fontWeight: 'bold' }}>
+                      {memEst.standardMhaKvGiB.toFixed(1)} GiB {memEst.standardMhaKvGiB >= 150 && '⚠️ Out of Single HBM!'}
                     </span>
                   </div>
                   
@@ -213,9 +225,9 @@ export const InfrastructureDeepDive: React.FC = () => {
                     {/* Chip Blocks (8 chips) */}
                     {Array.from({ length: 8 }).map((_, idx) => {
                       const chipX = 20 + idx * 28;
-                      const activeChips = Math.ceil((contextSlider / 1024) * 8);
+                      const activeChips = Math.min(8, Math.max(1, Math.ceil((memEst.standardMhaKvGiB / 200) * 8)));
                       const isActive = idx < activeChips;
-                      const chipColor = contextSlider >= 800 ? '#EF4444' : '#FFB000';
+                      const chipColor = memEst.standardMhaKvGiB >= 150 ? '#EF4444' : '#FFB000';
                       
                       return (
                         <rect 
@@ -239,14 +251,16 @@ export const InfrastructureDeepDive: React.FC = () => {
                   </svg>
                 </div>
 
-                {/* KDA Cache RAM Stick */}
+                {/* KDA + MLA Cache RAM Stick */}
                 <div style={{ flex: '1', minWidth: '240px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#E2E8F0', marginBottom: '8px' }}>
-                    <span>KDA state-path toy estimate (O(1) in N)</span>
-                    <span style={{ color: '#10B981', fontWeight: 'bold' }}>0.08 GB (O(1) Constant)</span>
+                    <span>K3 Hybrid Cache (69 KDA + 24 MLA)</span>
+                    <span style={{ color: '#10B981', fontWeight: 'bold' }}>
+                      {memEst.totalK3CacheGiB.toFixed(2)} GiB
+                    </span>
                   </div>
                   <small style={{ display: 'block', color: '#94A3B8', marginBottom: '8px', lineHeight: '1.45' }}>
-                    Illustrative KDA state-path estimate, not total inference memory. Exact size depends on head width, dtype, batch size, and implementation. MLA layers retain per-token latent KV entries; weights, activations, and runtime workspace are separate.
+                    69 KDA recurrent states: {memEst.kdaRecurrentStateGiB.toFixed(2)} GiB (O(1) constant); 24 MLA latent KV entries: {memEst.mlaLatentKvGiB.toFixed(2)} GiB (d_c=512).
                   </small>
                   
                   {/* SVG RAM Stick */}
@@ -254,10 +268,11 @@ export const InfrastructureDeepDive: React.FC = () => {
                     {/* RAM Board - green tinted */}
                     <rect x="10" y="15" width="240" height="35" rx="3" fill="#0D2E27" stroke="rgba(16, 185, 129, 0.2)" strokeWidth="1" />
                     
-                    {/* Chip Blocks (8 chips, only first is active) */}
+                    {/* Chip Blocks (8 chips, only fraction active) */}
                     {Array.from({ length: 8 }).map((_, idx) => {
                       const chipX = 20 + idx * 28;
-                      const isActive = idx === 0; // KDA memory footprint is constant O(1) - only 1 block is ever active!
+                      const activeChips = Math.min(8, Math.max(1, Math.ceil((memEst.totalK3CacheGiB / 200) * 8)));
+                      const isActive = idx < activeChips;
                       
                       return (
                         <rect 
@@ -437,6 +452,13 @@ export const InfrastructureDeepDive: React.FC = () => {
                   <div style={{ fontSize: '1.02rem', color: '#FFF', fontWeight: 'bold' }}>Budget Control & Admission</div>
                   <div style={{ fontSize: '1.15rem', color: '#94A3B8', marginTop: '2px' }}>
                     Dynamically monitors global GPU memory utilization, automatically fine-tuning Token budget thresholds for long-context generation to prevent ultra-long agent interactions from exhausting hardware resources.
+                  </div>
+                </div>
+
+                <div style={{ borderLeft: '3px solid #F59E0B', paddingLeft: '8px' }}>
+                  <div style={{ fontSize: '1.02rem', color: '#FFF', fontWeight: 'bold' }}>Firecracker MicroVM Snapshot Restore (49ms)</div>
+                  <div style={{ fontSize: '1.15rem', color: '#94A3B8', marginTop: '2px' }}>
+                    The 49ms metric measures the Firecracker microVM memory snapshot restoration latency. AgentEnv loads pre-forked RAM pages directly into execution, bypassing Linux kernel and Python runtime cold-boot penalties.
                   </div>
                 </div>
               </div>

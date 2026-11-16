@@ -66,32 +66,32 @@ const reasoningData = {
   agent: {
     low: [
       { text: "[System] Received Input: Locate mysql container crash logs in isolated container and auto-repair.", type: "system" },
-      { text: "[Output] Table Repair Plan:\n1. Log in to the container: \`docker exec -it mysql-container bash\`.\n2. Query the crash logs to locate the crashed table.\n3. Execute MySQL command: \`REPAIR TABLE database.table_name;\` to repair table structures corrupted by logical errors.", type: "output" }
+      { text: "[Output] Table Repair Plan:\n1. Log in to the container: `docker exec -it mysql-container bash`.\n2. Query the crash logs to locate the crashed table.\n3. Execute MySQL command: `REPAIR TABLE database.table_name;` to repair table structures corrupted by logical errors.", type: "output" }
     ],
     high: [
       { text: "[System] Received input, launching Chain of Thought...", type: "system" },
       { text: "[Thought] Task: Autonomous troubleshooting. We need to extract the mysql container's recent crash logs, analyze them, and execute a repair.", type: "thought" },
-      { text: "[Thought] Executing \`docker logs\` to look for error keywords like 'InnoDB: error', 'corruption', 'marked as crashed'.", type: "thought" },
-      { text: "[Thought] If logs show InnoDB internal index page corruption, set \`innodb_force_recovery = 4\` in \`my.cnf\` to force process startup and export backup.", type: "thought" },
+      { text: "[Thought] Executing `docker logs` to look for error keywords like 'InnoDB: error', 'corruption', 'marked as crashed'.", type: "thought" },
+      { text: "[Thought] If logs show InnoDB internal index page corruption, set `innodb_force_recovery = 4` in `my.cnf` to force process startup and export backup.", type: "thought" },
       { text: "[Output] Automated Troubleshooting Script:\n```bash\n# 1. Capture core crash logs\ndocker logs mysql-container 2>&1 | grep -iE 'error|crashed|corrupt' > db_err.log\n# 2. Repair corrupted table\ndocker exec -i mysql-container mysql -u root -p'pass' -e \"REPAIR TABLE main.users;\"\n```", type: "output" }
     ],
     max: [
       { text: "[System] Received Input: Launching simulated crashed MySQL container and cloning state in AgentEnv distributed sandbox...", type: "system" },
       { text: "[Thought] Task: Troubleshoot and repair database crash failure in isolated container. Defining autonomous diagnostic decision tree.", type: "thought" },
-      { text: "[Thought] Action 1: Test port 3306 connection. Received error \`Connection refused\`. Process is not running.", type: "thought" },
-      { text: "[Thought] Action 2: Log in to container, check running processes with \`ps aux\`. Verified no \`mysqld\` process.", type: "thought" },
-      { text: "[Thought] Action 3: Read last 50 lines of \`/var/log/mysql/error.log\` to extract the crash reason.", type: "thought" },
-      { text: "[Thought] Log contains critical error: \`InnoDB: Write to file ./ibdata1 failed at offset 104857600. Error 28: No space left on device\`.", type: "thought" },
+      { text: "[Thought] Action 1: Test port 3306 connection. Received error `Connection refused`. Process is not running.", type: "thought" },
+      { text: "[Thought] Action 2: Log in to container, check running processes with `ps aux`. Verified no `mysqld` process.", type: "thought" },
+      { text: "[Thought] Action 3: Read last 50 lines of `/var/log/mysql/error.log` to extract the crash reason.", type: "thought" },
+      { text: "[Thought] Log contains critical error: `InnoDB: Write to file ./ibdata1 failed at offset 104857600. Error 28: No space left on device`.", type: "thought" },
       { text: "[Thought] Root cause identified: Not table corruption, but container partition disk space is completely full, causing InnoDB writes to interrupt and crash.", type: "thought" },
-      { text: "[Thought] Action 4: Run \`df -h\`. Confirmed root mount usage at 100%.", type: "thought" },
-      { text: "[Thought] Action 5: Search for cleanable files. Found huge backlog of historical \`access.log\` under \`/var/log/nginx/\` without logrotate, total size 9.4GB.", type: "thought" },
-      { text: "[Thought] Action 6: Safely release space. Run \`rm -f /var/log/nginx/access.log.*\` and clear active logs. Re-scan \`df -h\`, utilization dropped to 45%.", type: "thought" },
-      { text: "[Thought] Action 7: Restart database service via \`service mysql start\` and monitor health metrics. Service started successfully!", type: "thought" },
+      { text: "[Thought] Action 4: Run `df -h`. Confirmed root mount usage at 100%.", type: "thought" },
+      { text: "[Thought] Action 5: Search for cleanable files. Found huge backlog of historical `access.log` under `/var/log/nginx/` without logrotate, total size 9.4GB.", type: "thought" },
+      { text: "[Thought] Action 6: Safely release space. Run `rm -f /var/log/nginx/access.log.*` and clear active logs. Re-scan `df -h`, utilization dropped to 45%.", type: "thought" },
+      { text: "[Thought] Action 7: Restart database service via `service mysql start` and monitor health metrics. Service started successfully!", type: "thought" },
       { text: "[Sandbox Running] Running concurrent write tests on repaired sandbox database to verify data consistency...", type: "system" },
-      { text: "[Correction] Write test failed: Due to forced interruption during space exhaustion, some transactions show inconsistency post-restart due to missing undo logs. Running \`mysqlcheck --all-databases --auto-repair\`.", type: "correction" },
+      { text: "[Correction] Write test failed: Due to forced interruption during space exhaustion, some transactions show inconsistency post-restart due to missing undo logs. Running `mysqlcheck --all-databases --auto-repair`.", type: "correction" },
       { text: "[Sandbox Running] Second round of consistency self-healing test...", type: "system" },
       { text: "[Sandbox Output] Verification succeeded, no bad blocks or inconsistencies found. Database status restored to normal.", type: "thought" },
-      { text: "[Output] Diagnostic & Self-Healing Report:\n1. **Crash Trigger**: MySQL disk space exhausted by Nginx logs (9.4GB), write operations triggered \`Error 28\` leading to database crash.\n2. **Self-Healing Executed**:\n   - Cleaned up Nginx historical log garbage;\n   - Released 55% disk space;\n   - Executed crash self-healing check and restarted MySQL process;\n   - Performed database index consistency atomic self-check.\n3. **Prevention Recommendation**: Configure Nginx Logrotate and set disk warning alerts at 85% utilization.", type: "output" }
+      { text: "[Output] Diagnostic & Self-Healing Report:\n1. **Crash Trigger**: MySQL disk space exhausted by Nginx logs (9.4GB), write operations triggered `Error 28` leading to database crash.\n2. **Self-Healing Executed**:\n   - Cleaned up Nginx historical log garbage;\n   - Released 55% disk space;\n   - Executed crash self-healing check and restarted MySQL process;\n   - Performed database index consistency atomic self-check.\n3. **Prevention Recommendation**: Configure Nginx Logrotate and set disk warning alerts at 85% utilization.", type: "output" }
     ]
   }
 };
@@ -153,8 +153,13 @@ export const ReasoningSandbox: React.FC = () => {
     <div className="tab-panel active">
       <header>
         <div className="badge">Chapter 4.2 - Reasoning Effort RL Sandbox</div>
-        <h1>Reinforcement Learning & Reasoning Extrapolation Sandbox</h1>
-        <p className="subtitle">Solving complex problems through Multi-Teacher On-Policy Distillation and adaptive reasoning depth</p>
+        <h1>Reinforcement Learning &amp; Reasoning Extrapolation Sandbox</h1>
+        <p className="subtitle">
+          Solving complex problems through Multi-Teacher On-Policy Distillation (MOPD) and adaptive reasoning depth.
+        </p>
+        <div style={{ marginTop: '8px', display: 'inline-block', fontSize: '0.78rem', background: 'rgba(56, 189, 248, 0.12)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '3px 10px', borderRadius: '4px' }}>
+          Educational Simulation: Scripted reasoning traces demonstrating Low / High / Max effort trajectories and environment feedback; not live API model responses.
+        </div>
       </header>
 
       <div className="grid-2 reasoning-layout">

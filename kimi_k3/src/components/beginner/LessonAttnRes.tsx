@@ -152,18 +152,18 @@ const Scene3: React.FC = () => (
     <g transform="translate(40,190)">
       <rect x="0" y="0" width="680" height="56" rx="8" fill="rgba(0,242,254,0.08)" stroke="rgba(0,242,254,0.3)" />
       <text x="340" y="22" fill="#E2E8F0" fontSize="12.5" textAnchor="middle">
-        block 8 out = 0.08×emb + 0.08×b1 + 0.12×b2 + … + 0.22×b7
+        h_l = ∑ α_k · b_k (Selective Cross-Layer Aggregation)
       </text>
       <text x="340" y="44" fill="#64748B" fontSize="11.5" textAnchor="middle">
-        (weights ≈ softmax, fixed after training)
+        (w_l parameter is trained, while weights α adapt dynamically to each token's representation)
       </text>
     </g>
 
     <text x="20" y="270" fill="#94A3B8" fontSize="13.5">
-      Neighboring blocks get the most weight — yet the network also learns to skip ahead,
+      The pseudo-query w_l selectively attends to whichever earlier block representations are most relevant,
     </text>
     <text x="20" y="292" fill="#94A3B8" fontSize="13.5">
-      like a student who flips straight back to the most important page of the notes.
+      like a reader flipping directly to the specific notes needed for the current concept.
     </text>
   </svg>
 );
@@ -189,9 +189,9 @@ export const LessonAttnRes: BeginnerLesson = {
       keypoint: 'AttnRes lets every block reach any historical block directly — "selective memory" along the depth dimension.',
     },
     {
-      title: 'Learned weights: the network picks which "notes" to reopen',
-      analogy: 'You don\'t study evenly — key chapters get revisited often, irrelevant ones skimmed. AttnRes weights work the same way (fixed after training).',
-      explain: <>Visualizing the learned weights: the nearest block wins, but the network also learns <b>selective skips</b>. Different blocks develop different preferences (attention layers favor shallow syntax, expert layers deep semantics).</>,
+      title: 'Dynamic content attention: the network picks which "notes" to reopen',
+      analogy: 'You don\'t study evenly — key chapters get revisited often, irrelevant ones skimmed. AttnRes evaluates dynamic content attention: layer pseudo-query w_l scores each earlier block\'s actual token representation.',
+      explain: <>AttnRes computes dynamic content attention: <b>α_&#123;l,k&#125; = softmax(w_lᵀ · RMSNorm(b_k))</b>. Rather than static weights or always favoring adjacent blocks, the attention dynamically routes the most relevant block representations (e.g. shallow lexical features or intermediate reasoning states) directly to the current layer.</>,
       visual: <Scene3 />,
       tip: 'Cost is tiny: <2% inference latency overhead on typical loads, while saving ~25% training compute for the same loss (1.25×).',
     },

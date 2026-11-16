@@ -735,14 +735,14 @@ const Scene7: React.FC = () => {
             <rect x={tk.x} y={70} width="60" height="36" rx="9" fill="rgba(255,255,255,0.06)" stroke={tk.t === 'it' ? '#00F2FE' : 'rgba(255,255,255,0.15)'} strokeWidth={tk.t === 'it' ? 2 : 1} />
             <text x={tk.x + 30} y="93" fill={tk.t === 'it' ? '#00F2FE' : '#E2E8F0'} fontSize="13" fontWeight={tk.t === 'it' ? 700 : 400} textAnchor="middle">{tk.t}</text>
             <rect key={gKey(step === 1)} className={step === 1 ? 'bgn-fill' : ''} x={tk.x + 10} y={116} width="40" height="18" rx="4" fill="rgba(255,176,0,0.3)" stroke="rgba(255,176,0,0.6)" strokeWidth="1" />
-            <text x={tk.x + 30} y="129" fill="#FFB000" fontSize="9.5" textAnchor="middle">K/V</text>
+            <text x={tk.x + 30} y="129" fill="#FFB000" fontSize="11" textAnchor="middle">K/V</text>
           </g>
         ))}
         <text x="20" y="250" fill="#94A3B8" fontSize="12.5">
-          each new token computes only its own Q/K/V — earlier tokens are read from the cache.
+          Each new token computes only its own Q/K/V (O(1) projection) — earlier tokens are read from the KV cache.
         </text>
         <text x="20" y="272" fill="#00E676" fontSize="12.5" fontWeight="bold">
-          per-token cost stays constant → total grows linearly (O(n)).
+          Attention read scans t past tokens: O(t) per token, O(N²) cumulative attention cost.
         </text>
       </g>
 
@@ -752,17 +752,17 @@ const Scene7: React.FC = () => {
         <g transform="translate(40,110)">
           <rect x="0" y="0" width="170" height="46" rx="8" fill="rgba(0,242,254,0.08)" stroke="#00F2FE" strokeWidth="1.4" />
           <text x="85" y="20" fill="#00F2FE" fontSize="12.5" fontWeight="bold" textAnchor="middle">"it"'s Q</text>
-          <text x="85" y="37" fill="#94A3B8" fontSize="10.5" textAnchor="middle">asked once → discarded</text>
+          <text x="85" y="37" fill="#94A3B8" fontSize="11" textAnchor="middle">asked once → discarded</text>
         </g>
         <g transform="translate(290,110)">
           <rect x="0" y="0" width="190" height="46" rx="8" fill="rgba(255,176,0,0.08)" stroke="#FFB000" strokeWidth="1.4" />
           <text x="95" y="20" fill="#FFB000" fontSize="12.5" fontWeight="bold" textAnchor="middle">"it"'s K &amp; V</text>
-          <text x="95" y="37" fill="#94A3B8" fontSize="10.5" textAnchor="middle">kept — future tokens query them</text>
+          <text x="95" y="37" fill="#94A3B8" fontSize="11" textAnchor="middle">kept — future tokens query them</text>
         </g>
         <g transform="translate(560,110)">
           <rect x="0" y="0" width="180" height="46" rx="8" fill="rgba(255,255,255,0.05)" stroke="#94A3B8" strokeWidth="1.2" />
           <text x="90" y="20" fill="#94A3B8" fontSize="12.5" fontWeight="bold" textAnchor="middle">"was"'s Q</text>
-          <text x="90" y="37" fill="#94A3B8" fontSize="10.5" textAnchor="middle">reads "it"'s K/V — never its Q</text>
+          <text x="90" y="37" fill="#94A3B8" fontSize="11" textAnchor="middle">reads "it"'s K/V — never its Q</text>
         </g>
         <path d="M 560 133 L 480 133" stroke="#00F2FE" strokeWidth="1.8" strokeDasharray="5 4" className="bgn-flow-line" markerEnd="url(#bgn-arrow)" />
 
@@ -839,9 +839,9 @@ export const LessonAttention: BeginnerLesson = {
     {
       title: 'KV cache: why generation gets cheaper',
       analogy: 'A librarian who keeps a one-line summary card (K/V) of each book instead of re-reading every book for each new visitor — and throws away the visitor\'s question (Q) after answering it.',
-      explain: <>Without a cache, each new token re-reads every earlier token: total work = 1+2+…+n ≈ n²/2 — quadratic. The <b>KV Cache</b> stores each token's K/V once, so each new token only computes its own Q/K/V and reads the rest (linear O(n)). Q is never cached: it is the "question", used once by its own token; K/V are the "answers" every future token may query.</>,
+      explain: <>Without a cache, each new token re-runs the entire network on all past tokens: total projection recomputation work is quadratic O(n²). The <b>KV Cache</b> stores each token's K and V projections once, so each new token only projects itself. However, computing attention scores against the cache still takes O(t) dot-products per step (totaling O(n²) attention read work). This fundamental memory and compute bottleneck of standard attention is why Kimi K3 adopts <b>KDA</b>: KDA maintains a fixed-size recurrent state matrix S_t with true O(1) memory and O(1) read/update per token!</>,
       visual: <Scene7 />,
-      keypoint: 'KV Cache = reuse each token\'s K/V instead of recomputing → generation drops from quadratic to linear. Q is not cached because each Q is asked only once by its owner.',
+      keypoint: 'KV Cache avoids recomputing past K/V projections, but reading cached keys still scales as O(t) per token. KDA solves this by maintaining a constant O(1) recurrent memory state.',
     },
   ],
 };

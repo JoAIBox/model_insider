@@ -8,13 +8,13 @@ interface BenchmarkItem {
   sol56: number;
   opus48: number;
   gpt55: number;
-  glm52: number;
+  glm52: number | null;
 }
 
 const benchmarkData: BenchmarkItem[] = [
   { name: "GPQA Diamond (Graduate-Level Reasoning)", category: "Reasoning", kimiK3: 93.5, fable5: 92.6, sol56: 94.1, opus48: 91.0, gpt55: 93.5, glm52: 91.2 },
   { name: "DeepSWE (Software Engineering Challenge)", category: "Coding", kimiK3: 67.5, fable5: 70.0, sol56: 73.0, opus48: 59.0, gpt55: 67.0, glm52: 46.2 },
-  { name: "BrowseComp (Complex Agentic Browser)", category: "Agentic", kimiK3: 91.2, fable5: 88.0, sol56: 90.4, opus48: 84.3, gpt55: 84.4, glm52: 40.0 },
+  { name: "BrowseComp (Complex Agentic Browser)", category: "Agentic", kimiK3: 91.2, fable5: 88.0, sol56: 90.4, opus48: 84.3, gpt55: 84.4, glm52: null },
   { name: "FrontierSWE (Frontier Coding)", category: "Coding", kimiK3: 81.2, fable5: 86.6, sol56: 71.3, opus48: 66.7, gpt55: 64.9, glm52: 67.3 },
   { name: "SWE-Marathon (Marathon Software Engineering)", category: "Coding", kimiK3: 42.0, fable5: 35.0, sol56: 39.0, opus48: 40.0, gpt55: 14.0, glm52: 13.0 }
 ];
@@ -32,8 +32,6 @@ export const EvaluationDashboard: React.FC = () => {
   const [barGrowthProgress, setBarGrowthProgress] = useState<number>(0);
 
   useEffect(() => {
-    // Reset and trigger growing animation on benchmark change
-    setBarGrowthProgress(0);
     let start = 0;
     const interval = setInterval(() => {
       start += 0.05;
@@ -269,12 +267,14 @@ export const EvaluationDashboard: React.FC = () => {
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       {models.map((model, idx) => {
-                        const currentWidth = model.val * barGrowthProgress;
+                        const currentWidth = model.val !== null ? model.val * barGrowthProgress : 0;
                         return (
                           <div key={idx}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', color: '#94A3B8', marginBottom: '3px' }}>
                               <span>{model.name}</span>
-                              <span style={{ fontWeight: 'bold', color: model.color }}>{currentWidth.toFixed(1)}%</span>
+                              <span style={{ fontWeight: 'bold', color: model.color }}>
+                                {model.val !== null ? `${currentWidth.toFixed(1)}%` : 'N/A (-)'}
+                              </span>
                             </div>
                             <div style={{ background: '#1E293B', height: '10px', borderRadius: '5px', overflow: 'hidden' }}>
                               <div 

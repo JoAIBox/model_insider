@@ -65,7 +65,7 @@ const navSections: NavSection[] = [
 const getTabContent = (activeTab: Tab, onNavigate: (tab: Tab) => void): React.ReactNode => {
   const tabMap: Record<Tab, React.ReactNode> = {
     beginner: <BeginnerAcademy lessons={beginnerLessons} />,
-    overview: <Dashboard onNavigateTab={onNavigate} />,
+    overview: <Dashboard onNavigateTab={(tab) => onNavigate(tab as Tab)} />,
     kda: <KDAOperatorDeepDive />,
     attnres: <AttnResOperatorDeepDive />,
     moe: <MoEOperatorDeepDive />,

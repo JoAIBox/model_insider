@@ -86,10 +86,10 @@ const Scene3: React.FC = () => (
     <text x="20" y="34" fill="#E2E8F0" fontSize="18" fontWeight="bold">Expert panel: process independently, merge by weight</text>
 
     {[0, 1, 2, 3, 4, 5].map((i) => (
-      <g key={i} transform={`translate(${40 + i * 116}, 90)`}>
-        <rect x="0" y="0" width="96" height="52" rx="8" fill="rgba(0,242,254,0.10)" stroke="#00F2FE" strokeWidth="1.4" />
-        <text x="48" y="22" fill="#00F2FE" fontSize="12" fontWeight="bold" textAnchor="middle">E{i + 1}</text>
-        <text x="48" y="42" fill="#94A3B8" fontSize="10.5" textAnchor="middle">3072-dim out</text>
+      <g key={i} transform={`translate(${36 + i * 118}, 90)`}>
+        <rect x="0" y="0" width="102" height="52" rx="8" fill="rgba(0,242,254,0.10)" stroke="#00F2FE" strokeWidth="1.4" />
+        <text x="51" y="22" fill="#00F2FE" fontSize="12" fontWeight="bold" textAnchor="middle">E{i + 1}</text>
+        <text x="51" y="42" fill="#94A3B8" fontSize="11" textAnchor="middle">3584-d (FFN: 3072)</text>
       </g>
     ))}
     <text x={40} y={165} fill="#64748B" fontSize="11.5">(16 experts total; 6 shown)</text>
@@ -104,7 +104,7 @@ const Scene3: React.FC = () => (
     <g transform="translate(560,190)">
       <rect x="0" y="0" width="180" height="60" rx="10" fill="rgba(155,81,224,0.15)" stroke="#A78BFA" strokeWidth="2" />
       <text x="90" y="24" fill="#A78BFA" fontSize="13.5" fontWeight="bold" textAnchor="middle">Weighted merge</text>
-      <text x="90" y="46" fill="#94A3B8" fontSize="10.5" textAnchor="middle">sum of 16 × router weights</text>
+      <text x="90" y="46" fill="#94A3B8" fontSize="11" textAnchor="middle">sum of 16 × router weights</text>
     </g>
 
     <FlowLine x1={750} y1={220} x2={760} y2={220} width={0} />
